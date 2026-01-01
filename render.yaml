@@ -1,0 +1,66 @@
+services:
+  # ====================================
+  # CRON JOB - PUBBLICAZIONE AUTOMATICA
+  # ====================================
+  - type: cron
+    name: facebook-auto-publisher
+    env: python
+    region: frankfurt
+    
+    # PYTHON VERSION
+    runtime: python3.11
+    
+    # SCHEDULAZIONE (formato cron - timezone UTC)
+    # 0 8,13,18 * * * = 9:00, 14:00, 19:00 ora italiana (inverno UTC+1)
+    # Per estate (UTC+2) usa: 0 7,12,17 * * *
+    schedule: "0 8,13,18 * * *"
+    
+    # BUILD
+    buildCommand: pip install -r requirements.txt
+    
+    # START
+    startCommand: python facebook_auto_publisher.py
+    
+    # PLAN
+    plan: free
+    
+    # VARIABILI D'AMBIENTE
+    envVars:
+      - key: FB_PAGE_ID
+        sync: false
+        
+      - key: FB_ACCESS_TOKEN
+        sync: false
+        
+      - key: JSON_SOURCE
+        value: https://tuo-gestionale.com/api/auto/disponibili
+        
+      - key: MAX_POSTS
+        value: "1"
+        
+      - key: PYTHONUNBUFFERED
+        value: "1"
+        
+      - key: TZ
+        value: Europe/Rome
+
+# ====================================
+# AMBIENTE DI STAGING (opzionale)
+# ====================================
+# - type: cron
+#   name: facebook-auto-publisher-staging
+#   env: python
+#   runtime: python3.11
+#   schedule: "*/30 * * * *"
+#   buildCommand: pip install -r requirements.txt
+#   startCommand: python facebook_auto_publisher.py
+#   plan: free
+#   envVars:
+#     - key: FB_PAGE_ID
+#       value: "test_page_id"
+#     - key: FB_ACCESS_TOKEN
+#       sync: false
+#     - key: JSON_SOURCE
+#       value: https://staging-api.example.com/autos
+#     - key: MAX_POSTS
+#       value: "1"
