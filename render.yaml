@@ -1,66 +1,69 @@
+# ==========================================
+# render.yaml - Configurazione Render
+# Facebook Auto Publisher - VERSIONE SICURA
+# ==========================================
+
 services:
-  # ====================================
-  # CRON JOB - PUBBLICAZIONE AUTOMATICA
-  # ====================================
   - type: cron
-    name: facebook-auto-publisher
+    name: fb-auto-publisher
     env: python
     region: frankfurt
     
-    # PYTHON VERSION
-    runtime: python3.11
+    # Schedule: Alle 10:00 e 15:00 ogni giorno
+    schedule: "0 10,15 * * *"
     
-    # SCHEDULAZIONE (formato cron - timezone UTC)
-    # 0 8,13,18 * * * = 9:00, 14:00, 19:00 ora italiana (inverno UTC+1)
-    # Per estate (UTC+2) usa: 0 7,12,17 * * *
-    schedule: "0 8,13,18 * * *"
-    
-    # BUILD
+    # Build e start
     buildCommand: pip install -r requirements.txt
+    startCommand: python fb_auto_publisher.py
     
-    # START
-    startCommand: python facebook_auto_publisher.py
+    # Repository
+    repo: https://github.com/B3no97/fb-auto-publisher.git
     
-    # PLAN
-    plan: free
+    branch: main
     
-    # VARIABILI D'AMBIENTE
+    # Python version
+    runtime: python-3.11
+    
+    # Variabili d'ambiente
+    # NOTA: Le variabili SENSIBILI vanno configurate nel Dashboard Render!
     envVars:
+      # === VARIABILI PUBBLICHE (sicure da committare) ===
+      
+      - key: DB_HOST
+        value: gestionale-auto-simonebenolli-bf2d.e.aivencloud.com
+      
+      - key: DB_PORT
+        value: 19352
+      
+      - key: DB_NAME
+        value: gestionale_auto
+      
+      - key: DB_USER
+        value: avnadmin
+      
       - key: FB_PAGE_ID
-        sync: false
-        
-      - key: FB_ACCESS_TOKEN
-        sync: false
-        
-      - key: JSON_SOURCE
-        value: https://tuo-gestionale.com/api/auto/disponibili
-        
+        value: 875722978961810
+      
       - key: MAX_POSTS
-        value: "1"
-        
+        value: 1
+      
       - key: PYTHONUNBUFFERED
-        value: "1"
-        
-      - key: TZ
-        value: Europe/Rome
+        value: 1
+      
+      # === VARIABILI SENSIBILI ===
+      # CONFIGURA MANUALMENTE NEL DASHBOARD RENDER:
+      # 
+      # DB_PASSWORD = [nuova password da Aiven Console]
+      # FB_ACCESS_TOKEN = [nuovo token permanente da Facebook]
+      #
+      # NON inserire questi valori qui! Usa il dashboard:
+      # Dashboard → Service → Environment → Add Environment Variable
+      
+      - key: DB_PASSWORD
+        sync: false  # Configura nel dashboard
+      
+      - key: FB_ACCESS_TOKEN
+        sync: false  # Configura nel dashboard
 
-# ====================================
-# AMBIENTE DI STAGING (opzionale)
-# ====================================
-# - type: cron
-#   name: facebook-auto-publisher-staging
-#   env: python
-#   runtime: python3.11
-#   schedule: "*/30 * * * *"
-#   buildCommand: pip install -r requirements.txt
-#   startCommand: python facebook_auto_publisher.py
-#   plan: free
-#   envVars:
-#     - key: FB_PAGE_ID
-#       value: "test_page_id"
-#     - key: FB_ACCESS_TOKEN
-#       sync: false
-#     - key: JSON_SOURCE
-#       value: https://staging-api.example.com/autos
-#     - key: MAX_POSTS
-#       value: "1"
+    # Piano gratuito
+    plan: starter
