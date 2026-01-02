@@ -60,7 +60,7 @@ jobs:
       # 5. Upload log in caso di errore
       - name: 📋 Upload logs
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fb-publisher-logs
           path: fb_publisher.log
