@@ -118,34 +118,74 @@ class DatabaseManager:
     
     def load_autos_to_publish(self, max_posts: int) -> List[Dict]:
         """Carica le auto non ancora pubblicate"""
-        query = """
-            SELECT 
-                v.auto_id, 
-                a.marca, 
-                a.modello, 
-                a.targa,
-                a.anno_immatricolazione, 
-                a.chilometraggio,
-                a.carburante, 
-                a.cambio, 
-                a.colore,
-                a.potenza_kw,
-                a.cilindrata_cc,
-                v.descrizione, 
-                v.prezzo_vendita,
-                v.immagine_principale
-            FROM auto_vetrina v
-            JOIN auto a ON v.auto_id = a.id
-            WHERE v.pubblicata = 0 
-                AND a.stato = 'Disponibile'
-            ORDER BY v.data_pubblicazione ASC
-            LIMIT %s
-        """
-        
         conn = None
         try:
             conn = self.get_connection()
             cursor = conn.cursor(dictionary=True)
+            
+            # 1. Verifica totale auto in vetrina
+            cursor.execute("SELECT COUNT(*) as total FROM auto_vetrina")
+            total_vetrina = cursor.fetchone()['total']
+            logger.info(f"🔍 Totale auto in vetrina: {total_vetrina}")
+            
+            # 2. Verifica auto NON pubblicate
+            cursor.execute("SELECT COUNT(*) as total FROM auto_vetrina WHERE pubblicata = 0")
+            non_pubblicate = cursor.fetchone()['total']
+            logger.info(f"🔍 Auto NON pubblicate (pubblicata=0): {non_pubblicate}")
+            
+            # 3. Verifica totale auto disponibili
+            cursor.execute("SELECT COUNT(*) as total FROM auto WHERE stato = 'Disponibile'")
+            disponibili = cursor.fetchone()['total']
+            logger.info(f"🔍 Auto con stato 'Disponibile': {disponibili}")
+            
+            # 4. Verifica join completo
+            cursor.execute("""
+                SELECT COUNT(*) as total 
+                FROM auto_vetrina v
+                JOIN auto a ON v.auto_id = a.id
+                WHERE v.pubblicata = 0 AND a.stato = 'Disponibile'
+            """)
+            match_query = cursor.fetchone()['total']
+            logger.info(f"🔍 Auto che matchano i criteri (pubblicata=0 + Disponibile): {match_query}")
+            
+            # 5. Se ci sono auto, mostra dettagli
+            if non_pubblicate > 0:
+                cursor.execute("""
+                    SELECT v.auto_id, a.marca, a.modello, a.stato, v.pubblicata
+                    FROM auto_vetrina v
+                    JOIN auto a ON v.auto_id = a.id
+                    WHERE v.pubblicata = 0
+                    LIMIT 5
+                """)
+                sample = cursor.fetchall()
+                logger.info(f"📋 Esempio auto non pubblicate:")
+                for s in sample:
+                    logger.info(f"   - ID:{s['auto_id']} {s['marca']} {s['modello']} | Stato:{s['stato']} | Pubblicata:{s['pubblicata']}")
+            
+            # 6. Query principale
+            query = """
+                SELECT 
+                    v.auto_id, 
+                    a.marca, 
+                    a.modello, 
+                    a.targa,
+                    a.anno_immatricolazione, 
+                    a.chilometraggio,
+                    a.carburante, 
+                    a.cambio, 
+                    a.colore,
+                    a.potenza_kw,
+                    a.cilindrata_cc,
+                    v.descrizione, 
+                    v.prezzo_vendita,
+                    v.immagine_principale
+                FROM auto_vetrina v
+                JOIN auto a ON v.auto_id = a.id
+                WHERE v.pubblicata = 0 
+                    AND a.stato = 'Disponibile'
+                ORDER BY v.data_pubblicazione ASC
+                LIMIT %s
+            """
             cursor.execute(query, (max_posts,))
             autos = cursor.fetchall()
             
