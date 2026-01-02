@@ -129,9 +129,9 @@ class DatabaseManager:
             logger.info(f"🔍 Totale auto in vetrina: {total_vetrina}")
             
             # 2. Verifica auto NON pubblicate
-            cursor.execute("SELECT COUNT(*) as total FROM auto_vetrina WHERE pubblicata = 0")
+            cursor.execute("SELECT COUNT(*) as total FROM auto_vetrina WHERE pubblicata_fb = 0")
             non_pubblicate = cursor.fetchone()['total']
-            logger.info(f"🔍 Auto NON pubblicate (pubblicata=0): {non_pubblicate}")
+            logger.info(f"🔍 Auto NON pubblicate (pubblicata_fb=0): {non_pubblicate}")
             
             # 3. Verifica totale auto disponibili
             cursor.execute("SELECT COUNT(*) as total FROM auto WHERE stato = 'Disponibile'")
@@ -143,24 +143,24 @@ class DatabaseManager:
                 SELECT COUNT(*) as total 
                 FROM auto_vetrina v
                 JOIN auto a ON v.auto_id = a.id
-                WHERE v.pubblicata = 0 AND a.stato = 'Disponibile'
+                WHERE v.pubblicata_fb = 0 AND a.stato = 'Disponibile'
             """)
             match_query = cursor.fetchone()['total']
-            logger.info(f"🔍 Auto che matchano i criteri (pubblicata=0 + Disponibile): {match_query}")
+            logger.info(f"🔍 Auto che matchano i criteri (pubblicata_fb=0 + Disponibile): {match_query}")
             
             # 5. Se ci sono auto, mostra dettagli
             if non_pubblicate > 0:
                 cursor.execute("""
-                    SELECT v.auto_id, a.marca, a.modello, a.stato, v.pubblicata
+                    SELECT v.auto_id, a.marca, a.modello, a.stato, v.pubblicata_fb
                     FROM auto_vetrina v
                     JOIN auto a ON v.auto_id = a.id
-                    WHERE v.pubblicata = 0
+                    WHERE v.pubblicata_fb = 0
                     LIMIT 5
                 """)
                 sample = cursor.fetchall()
                 logger.info(f"📋 Esempio auto non pubblicate:")
                 for s in sample:
-                    logger.info(f"   - ID:{s['auto_id']} {s['marca']} {s['modello']} | Stato:{s['stato']} | Pubblicata:{s['pubblicata']}")
+                    logger.info(f"   - ID:{s['auto_id']} {s['marca']} {s['modello']} | Stato:{s['stato']} | pubblicata_fb:{s['pubblicata_fb']}")
             
             # 6. Query principale
             query = """
@@ -181,7 +181,7 @@ class DatabaseManager:
                     v.immagine_principale
                 FROM auto_vetrina v
                 JOIN auto a ON v.auto_id = a.id
-                WHERE v.pubblicata = 0 
+                WHERE v.pubblicata_fb = 0 
                     AND a.stato = 'Disponibile'
                 ORDER BY v.data_pubblicazione ASC
                 LIMIT %s
@@ -215,7 +215,7 @@ class DatabaseManager:
         """Aggiorna lo stato di pubblicazione dell'auto"""
         query = """
             UPDATE auto_vetrina 
-            SET pubblicata = 1, 
+            SET pubblicata_fb = 1, 
                 data_modifica = NOW()
             WHERE auto_id = %s
         """
