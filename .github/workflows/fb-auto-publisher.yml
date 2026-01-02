@@ -54,7 +54,7 @@ jobs:
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           MAX_POSTS: 5
-          CTA_TYPE: WHATSAPP
+          CTA_TYPE: WHATSAPP_MESSAGE
           CTA_LINK: https://wa.me/393407346239
 
         run: |
