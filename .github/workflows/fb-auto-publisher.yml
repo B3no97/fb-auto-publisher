@@ -2,7 +2,6 @@
 # .github/workflows/fb-auto-publisher.yml
 # GitHub Actions Workflow per pubblicazione automatica
 # ==========================================
-
 name: Facebook Auto Publisher
 
 # Esecuzione schedulata + manuale
@@ -45,27 +44,40 @@ jobs:
       # 4. Esegui lo script
       - name: 🚀 Run Facebook Auto Publisher
         env:
-          # Variabili d'ambiente da GitHub Secrets
+          # Database - da GitHub Secrets
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          
+          # Facebook - da GitHub Secrets
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
-          MAX_POSTS: 5
-          CTA_TYPE: WHATSAPP_MESSAGE
-          CTA_LINK: https://wa.me/393407346239
           
-          # Messenger
-          CTA_TYPE: MESSAGE_PAGE
-          CTA_LINK: https://m.me/875722978961810
+          # Configurazione pubblicazione
+          MAX_POSTS: "5"
           
-          # Altri
-          CTA_TYPE: LEARN_MORE  # "Scopri di più"
-          CTA_TYPE: SHOP_NOW    # "Acquista ora"
-          CTA_TYPE: CONTACT_US  # "Contattaci"
-
+          # ========================================
+          # OPZIONE 1: WhatsApp (CONSIGLIATO)
+          # ========================================
+          CTA_TYPE: "WHATSAPP_MESSAGE"
+          CTA_LINK: "https://wa.me/393407346239"
+          
+          # ========================================
+          # OPZIONE 2: Messenger
+          # Decommentare queste 2 righe e commentare OPZIONE 1
+          # ========================================
+          # CTA_TYPE: "MESSAGE_PAGE"
+          # CTA_LINK: "https://m.me/875722978961810"
+          
+          # ========================================
+          # OPZIONE 3: Link al sito web
+          # Decommentare queste 2 righe e commentare OPZIONE 1
+          # ========================================
+          # CTA_TYPE: "LEARN_MORE"
+          # CTA_LINK: "https://www.tuosito.it"
+          
         run: |
           python fb_auto_publisher.py
       
@@ -78,24 +90,51 @@ jobs:
           path: fb_publisher.log
           retention-days: 7
 
+# ==========================================
+# TIPI DI CTA DISPONIBILI
+# ==========================================
+# CTA_TYPE: "WHATSAPP_MESSAGE"  -> Pulsante "Invia messaggio" (apre WhatsApp)
+# CTA_TYPE: "MESSAGE_PAGE"      -> Pulsante "Invia messaggio" (apre Messenger)
+# CTA_TYPE: "LEARN_MORE"        -> Pulsante "Scopri di più"
+# CTA_TYPE: "SHOP_NOW"          -> Pulsante "Acquista ora"
+# CTA_TYPE: "CONTACT_US"        -> Pulsante "Contattaci"
+# CTA_TYPE: "SIGN_UP"           -> Pulsante "Iscriviti"
+# CTA_TYPE: "CALL_NOW"          -> Pulsante "Chiama ora"
 
 # ==========================================
 # SCHEDULE ALTERNATIVI
 # ==========================================
-
 # Solo una volta al giorno (ore 9:00 UTC = 10:00 Italia inverno)
 # - cron: '0 9 * * *'
 
 # Tre volte al giorno (mattina, pranzo, sera)
 # - cron: '0 8,12,17 * * *'
 
-# Solo giorni feriali
+# Solo giorni feriali (lun-ven alle 10:00 UTC)
 # - cron: '0 10 * * 1-5'
 
-# Solo weekend
+# Solo weekend (sab-dom alle 11:00 UTC)
 # - cron: '0 11 * * 6,0'
 
 # Ogni 4 ore
 # - cron: '0 */4 * * *'
 
+# Due volte al giorno (mattina e pomeriggio)
+# - cron: '0 10,15 * * *'
+
 # Tool per convertire orari: https://crontab.guru/
+
+# ==========================================
+# CONFIGURAZIONE GITHUB SECRETS
+# ==========================================
+# Per configurare i secrets su GitHub:
+# 1. Vai su: Settings > Secrets and variables > Actions
+# 2. Clicca "New repository secret"
+# 3. Aggiungi questi secrets:
+#    - DB_HOST
+#    - DB_PORT
+#    - DB_NAME
+#    - DB_USER
+#    - DB_PASSWORD
+#    - FB_PAGE_ID
+#    - FB_ACCESS_TOKEN
