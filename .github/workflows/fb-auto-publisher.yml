@@ -1,0 +1,89 @@
+# ==========================================
+# .github/workflows/fb-auto-publisher.yml
+# GitHub Actions Workflow per pubblicazione automatica
+# ==========================================
+
+name: Facebook Auto Publisher
+
+# Esecuzione schedulata + manuale
+on:
+  schedule:
+    # Alle 10:00 e 15:00 UTC ogni giorno
+    # Nota: GitHub Actions usa UTC, non ora italiana!
+    # 10:00 UTC = 11:00 Italia (inverno) / 12:00 Italia (estate)
+    # 15:00 UTC = 16:00 Italia (inverno) / 17:00 Italia (estate)
+    
+    - cron: "*/5 * * * *"  # ogni 5 minuti (per test)
+    # - cron: '0 10 * * *'  # 10:00 UTC
+    # - cron: '0 15 * * *'  # 15:00 UTC
+  
+  # Permetti esecuzione manuale dal tab Actions
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      # 1. Checkout del codice
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+      
+      # 2. Setup Python
+      - name: 🐍 Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      # 3. Installa dipendenze
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      # 4. Esegui lo script
+      - name: 🚀 Run Facebook Auto Publisher
+        env:
+          # Variabili d'ambiente da GitHub Secrets
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_NAME: ${{ secrets.DB_NAME }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+          MAX_POSTS: 1
+        run: |
+          python fb_auto_publisher.py
+      
+      # 5. Upload log in caso di errore
+      - name: 📋 Upload logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: fb-publisher-logs
+          path: fb_publisher.log
+          retention-days: 7
+
+
+# ==========================================
+# SCHEDULE ALTERNATIVI
+# ==========================================
+
+# Solo una volta al giorno (ore 9:00 UTC = 10:00 Italia inverno)
+# - cron: '0 9 * * *'
+
+# Tre volte al giorno (mattina, pranzo, sera)
+# - cron: '0 8,12,17 * * *'
+
+# Solo giorni feriali
+# - cron: '0 10 * * 1-5'
+
+# Solo weekend
+# - cron: '0 11 * * 6,0'
+
+# Ogni 4 ore
+# - cron: '0 */4 * * *'
+
+# Tool per convertire orari: https://crontab.guru/
