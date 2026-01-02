@@ -56,6 +56,15 @@ jobs:
           MAX_POSTS: 5
           CTA_TYPE: WHATSAPP_MESSAGE
           CTA_LINK: https://wa.me/393407346239
+          
+          # Messenger
+          CTA_TYPE: MESSAGE_PAGE
+          CTA_LINK: https://m.me/875722978961810
+          
+          # Altri
+          CTA_TYPE: LEARN_MORE  # "Scopri di più"
+          CTA_TYPE: SHOP_NOW    # "Acquista ora"
+          CTA_TYPE: CONTACT_US  # "Contattaci"
 
         run: |
           python fb_auto_publisher.py
