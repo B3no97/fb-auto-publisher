@@ -261,44 +261,49 @@ class FacebookPublisher:
                 logger.error(f"Response: {e.response.text}")
             raise
     
-    def publish_post(self, text: str, image_urls: Optional[List[str]] = None) -> Dict:
+    def publish_post(self, text: str, image_urls: Optional[List[str]] = None, link: Optional[str] = None) -> Dict:
         """
-        Pubblica un post su Facebook
+        Pubblica un post su Facebook con CTA button
         
         Args:
             text: Testo del post
             image_urls: Lista di URL delle immagini (opzionale)
+            link: URL del link da allegare (opzionale)
             
         Returns:
             Dizionario con la risposta di Facebook
         """
         if not image_urls or len(image_urls) == 0:
-            return self._publish_text_only(text)
+            return self._publish_text_with_link(text, link)
         elif len(image_urls) == 1:
-            return self._publish_single_image(text, image_urls[0])
+            return self._publish_single_image(text, image_urls[0], link)
         else:
-            return self._publish_carousel(text, image_urls[:self.config.MAX_IMAGES_PER_POST])
+            return self._publish_carousel(text, image_urls[:self.config.MAX_IMAGES_PER_POST], link)
     
-    def _publish_text_only(self, text: str) -> Dict:
-        """Pubblica solo testo"""
+    def _publish_text_with_link(self, text: str, link: Optional[str] = None) -> Dict:
+        """Pubblica testo con link"""
         endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/feed"
         payload = {
             "message": text,
             "access_token": self.config.FACEBOOK_ACCESS_TOKEN
         }
+        if link:
+            payload["link"] = link
         return self._make_request('POST', endpoint, data=payload)
     
-    def _publish_single_image(self, text: str, image_url: str) -> Dict:
-        """Pubblica un post con singola immagine"""
+    def _publish_single_image(self, text: str, image_url: str, link: Optional[str] = None) -> Dict:
+        """Pubblica un post con singola immagine e link"""
         endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/photos"
         payload = {
             "url": image_url,
             "caption": text,
             "access_token": self.config.FACEBOOK_ACCESS_TOKEN
         }
+        # Nota: con single photo non si può aggiungere link diretto
+        # Il link va nel testo del caption
         return self._make_request('POST', endpoint, data=payload)
     
-    def _publish_carousel(self, text: str, image_urls: List[str]) -> Dict:
+    def _publish_carousel(self, text: str, image_urls: List[str], link: Optional[str] = None) -> Dict:
         """Pubblica un post con carousel di immagini"""
         import json
         
@@ -322,13 +327,15 @@ class FacebookPublisher:
             "attached_media": json.dumps(media_ids),
             "access_token": self.config.FACEBOOK_ACCESS_TOKEN
         }
+        # Nota: con carousel + immagini non si può aggiungere link
+        # Il link va nel testo del messaggio
         return self._make_request('POST', endpoint, data=payload)
 
 # ========================================
-# POST GENERATOR - FORMATO COMPATTO
+# POST GENERATOR - ULTRA COMPACT
 # ========================================
 class PostGenerator:
-    """Genera il contenuto testuale dei post in formato compatto"""
+    """Genera il contenuto testuale dei post in formato ultra-compatto"""
     
     # Configurazione aziendale (PERSONALIZZA QUESTI VALORI)
     COMPANY_PHONE = "+39 123 456 7890"
@@ -336,62 +343,97 @@ class PostGenerator:
     COMPANY_WEBSITE = "https://www.tuazienda.it"
     COMPANY_NAME = "Auto Srl"
     
-    # Hashtag (max 3-5)
-    HASHTAGS = ["#AutoUsate", "#Concessionaria", "#ProvaSubito"]
-    
     @staticmethod
     def generate_text(auto: Dict) -> str:
         """
-        Genera il testo del post in formato compatto
-        Info chiave nei primi 125 caratteri - tutto visibile nel feed
+        Genera testo ULTRA-COMPATTO - Solo info essenziali
+        Massimo 80-90 caratteri per restare visibile sopra le immagini
+        
+        STRATEGIA:
+        - Riga 1: Marca Modello Anno (max 40 char)
+        - Riga 2: KM | Carburante | Prezzo (max 50 char)
         
         Args:
             auto: Dizionario con i dati dell'auto
             
         Returns:
-            Testo formattato per il post Facebook
+            Testo formattato ultra-compatto
         """
-        # Formatta i dati chiave
+        # Formatta i dati essenziali
+        marca = auto['marca']
+        modello = auto['modello']
         anno = auto.get('anno_immatricolazione', '')
+        
         km = auto.get('chilometraggio', 0)
-        km_formatted = f"{km:,}".replace(',', '.') if km else "N/D"
+        # Formato ultra-compatto: 14525 -> 14.5k
+        if km >= 1000:
+            km_str = f"{km/1000:.0f}k"
+        else:
+            km_str = str(km)
+        
+        carburante = auto.get('carburante', '').upper()
+        # Abbrevia carburante: Diesel->D, Benzina->B, GPL->G, Metano->M
+        carb_map = {'DIESEL': 'D', 'BENZINA': 'B', 'GPL': 'G', 'METANO': 'M', 'IBRIDO': 'HYB', 'ELETTRICO': 'EV'}
+        carb_short = carb_map.get(carburante, carburante[:3]) if carburante else ''
+        
         prezzo = float(auto['prezzo_vendita'])
-        prezzo_formatted = f"{prezzo:,.0f}".replace(',', '.')
+        # Formato compatto: 9000 -> 9k, 14500 -> 14.5k
+        if prezzo >= 1000:
+            prezzo_str = f"{prezzo/1000:.1f}k".replace('.0k', 'k')
+        else:
+            prezzo_str = f"{prezzo:.0f}"
         
-        # RIGA 1: Marca, Modello, Anno - MAX IMPATTO (sotto 80 char)
-        line1 = f"🚗 {auto['marca']} {auto['modello']} {anno}"
+        # COSTRUZIONE TESTO ULTRA-COMPATTO
+        # Riga 1: 🚗 VW Golf 2000
+        line1 = f"🚗 {marca} {modello}"
+        if anno:
+            line1 += f" {anno}"
         
-        # RIGA 2: Info chiave in formato ultra-compatto (sotto 60 char)
-        line2_parts = []
-        line2_parts.append(f"{km_formatted} km")
-        if auto.get('carburante'):
-            line2_parts.append(auto['carburante'])
-        if auto.get('cambio'):
-            line2_parts.append(auto['cambio'])
-        line2 = " • ".join(line2_parts)
+        # Riga 2: 14k km • GPL • € 9k
+        parts = []
+        parts.append(f"{km_str} km")
+        if carb_short:
+            parts.append(carb_short)
+        parts.append(f"€ {prezzo_str}")
+        line2 = " • ".join(parts)
         
-        # RIGA 3: PREZZO - Elemento più importante (sotto 30 char)
-        line3 = f"💰 € {prezzo_formatted}"
+        # Assemblaggio finale (target: 80-90 caratteri totali)
+        text = f"{line1}\n{line2}"
         
-        # RIGA 4: CTA cliccabile (sotto 50 char)
-        wa_link = f"https://wa.me/{PostGenerator.COMPANY_WHATSAPP}"
-        line4 = f"📲 {wa_link}"
+        return text
+    
+    @staticmethod
+    def generate_whatsapp_link(auto: Dict) -> str:
+        """Genera link WhatsApp con messaggio pre-compilato"""
+        marca = auto['marca']
+        modello = auto['modello']
+        anno = auto.get('anno_immatricolazione', '')
         
-        # Assemblaggio (totale ~125 caratteri - tutto visibile!)
-        text_parts = [line1, line2, line3, "", line4]
+        # Messaggio pre-compilato
+        message = f"Ciao! Sono interessato alla {marca} {modello}"
+        if anno:
+            message += f" {anno}"
+        message += ". Potete darmi maggiori informazioni?"
         
-        # Aggiungi descrizione SE breve (max 1 riga)
-        if auto.get('descrizione'):
-            desc = auto['descrizione']
-            if len(desc) < 60:  # Solo se molto corta
-                text_parts.insert(2, f"\n{desc}")
+        # Encode per URL
+        import urllib.parse
+        message_encoded = urllib.parse.quote(message)
         
-        # Hashtag finali
-        marca_hashtag = f"#{auto['marca'].replace(' ', '')}"
-        hashtags = " ".join([marca_hashtag] + PostGenerator.HASHTAGS[:2])  # Max 3 hashtag
-        text_parts.append(hashtags)
+        return f"https://wa.me/{PostGenerator.COMPANY_WHATSAPP}?text={message_encoded}"
+    
+    @staticmethod
+    def generate_website_link(auto: Dict) -> str:
+        """
+        Genera link al sito web (se hai pagina dedicata per l'auto)
+        Altrimenti usa homepage
+        """
+        # OPZIONE 1: Link diretto all'auto (se il tuo sito supporta URL specifici)
+        # auto_id = auto['auto_id']
+        # return f"{PostGenerator.COMPANY_WEBSITE}/auto/{auto_id}"
         
-        return "\n".join(text_parts)
+        # OPZIONE 2: Homepage con parametro di tracking
+        auto_id = auto['auto_id']
+        return f"{PostGenerator.COMPANY_WEBSITE}?utm_source=facebook&utm_medium=post&utm_campaign=auto_{auto_id}"
 
 # ========================================
 # ORCHESTRATORE PRINCIPALE
@@ -413,7 +455,7 @@ class AutoPublisher:
             Numero di post pubblicati con successo
         """
         logger.info("🚀 Avvio Facebook Auto Publisher")
-        logger.info("📝 Formato: COMPACT (ottimizzato per feed)")
+        logger.info("📝 Formato: ULTRA-COMPACT + LINK")
         
         # Carica auto da pubblicare
         autos = self.db.load_autos_to_publish(self.config.MAX_POSTS_PER_RUN)
@@ -431,8 +473,14 @@ class AutoPublisher:
             logger.info(f"{'='*60}")
             
             try:
-                # Genera testo del post in formato compatto
+                # Genera testo ultra-compatto (solo info essenziali)
                 post_text = self.post_gen.generate_text(auto)
+                
+                # Genera link WhatsApp con messaggio pre-compilato
+                wa_link = self.post_gen.generate_whatsapp_link(auto)
+                
+                # AGGIUNGI call-to-action al testo
+                post_text += f"\n\n💬 WhatsApp: {wa_link}"
                 
                 # Prepara lista immagini
                 images = []
@@ -444,14 +492,16 @@ class AutoPublisher:
                 # Filtra immagini vuote o None
                 images = [img for img in images if img and img.strip()]
                 
-                logger.info(f"📝 Lunghezza testo: {len(post_text)} caratteri")
+                logger.info(f"📝 Lunghezza testo base: {len(post_text.split(wa_link)[0])} caratteri")
+                logger.info(f"📝 Lunghezza testo totale: {len(post_text)} caratteri")
                 logger.info(f"🖼️ Numero immagini: {len(images)}")
+                logger.info(f"🔗 Link WhatsApp: {wa_link}")
                 
-                # Mostra preview del testo visibile nel feed
-                preview = post_text[:130] + "..." if len(post_text) > 130 else post_text
-                logger.info(f"👁️ Preview feed:\n{preview}\n")
+                # Mostra preview
+                logger.info(f"👁️ Preview completa:\n{post_text}\n")
                 
                 # Pubblica su Facebook
+                # Nota: il link WhatsApp è nel testo, Facebook lo renderà cliccabile automaticamente
                 result = self.fb.publish_post(post_text, images if images else None)
                 post_id = result.get('id', result.get('post_id', 'N/A'))
                 
