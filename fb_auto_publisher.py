@@ -325,10 +325,10 @@ class FacebookPublisher:
         return self._make_request('POST', endpoint, data=payload)
 
 # ========================================
-# POST GENERATOR - VERSIONE PROFESSIONALE
+# POST GENERATOR - FORMATO COMPATTO
 # ========================================
 class PostGenerator:
-    """Genera il contenuto testuale dei post in modo professionale"""
+    """Genera il contenuto testuale dei post in formato compatto"""
     
     # Configurazione aziendale (PERSONALIZZA QUESTI VALORI)
     COMPANY_PHONE = "+39 123 456 7890"
@@ -342,15 +342,8 @@ class PostGenerator:
     @staticmethod
     def generate_text(auto: Dict) -> str:
         """
-        Genera il testo del post per un'auto con struttura professionale
-        
-        Struttura:
-        1. Headline accattivante (Marca + Modello + Anno + Tag)
-        2. Descrizione breve personalizzata o punti chiave
-        3. Specifiche tecniche con emoji
-        4. Prezzo evidenziato
-        5. Call to Action cliccabili
-        6. Hashtag e branding
+        Genera il testo del post in formato compatto
+        Info chiave nei primi 125 caratteri - tutto visibile nel feed
         
         Args:
             auto: Dizionario con i dati dell'auto
@@ -358,129 +351,47 @@ class PostGenerator:
         Returns:
             Testo formattato per il post Facebook
         """
-        text_parts = []
-        
-        # ==========================================
-        # 1. HEADLINE - Marca + Modello + Anno + Tag accattivante
-        # ==========================================
-        anno = auto.get('anno_immatricolazione', '')
-        headline = f"🚗 {auto['marca']} {auto['modello']}"
-        if anno:
-            headline += f" {anno}"
-        headline += " – Pronta Consegna!"
-        
-        text_parts.append(headline)
-        text_parts.append("")
-        
-        # ==========================================
-        # 2. DESCRIZIONE BREVE
-        # ==========================================
-        if auto.get('descrizione'):
-            text_parts.append(auto['descrizione'])
-        else:
-            # Genera descrizione automatica
-            desc_parts = []
-            
-            if auto.get('chilometraggio'):
-                km = auto['chilometraggio']
-                if km < 20000:
-                    desc_parts.append("bassissimo chilometraggio")
-                elif km < 50000:
-                    desc_parts.append("basso chilometraggio")
-            
-            desc_parts.append("ottime condizioni")
-            desc_parts.append("pronta consegna")
-            
-            desc_text = "Auto con " + ", ".join(desc_parts) + "."
-            text_parts.append(desc_text.capitalize())
-        
-        text_parts.append("")
-        
-        # ==========================================
-        # 3. SPECIFICHE TECNICHE
-        # ==========================================
-        text_parts.append("📋 Specifiche:")
-        
-        if auto.get('anno_immatricolazione'):
-            text_parts.append(f"📅 Anno: {auto['anno_immatricolazione']}")
-        
-        if auto.get('chilometraggio'):
-            km_formatted = f"{auto['chilometraggio']:,}".replace(',', '.')
-            text_parts.append(f"🛣️ Km: {km_formatted}")
-        
-        if auto.get('carburante'):
-            text_parts.append(f"⛽ {auto['carburante']}")
-        
-        if auto.get('cambio'):
-            text_parts.append(f"⚙️ Cambio {auto['cambio']}")
-        
-        if auto.get('potenza_kw'):
-            text_parts.append(f"🔋 Potenza: {auto['potenza_kw']} kW")
-        
-        if auto.get('cilindrata_cc'):
-            text_parts.append(f"🏎️ Cilindrata: {auto['cilindrata_cc']} cc")
-        
-        if auto.get('colore'):
-            text_parts.append(f"🎨 {auto['colore']}")
-        
-        # ==========================================
-        # 4. PREZZO
-        # ==========================================
-        text_parts.append("")
-        prezzo_formatted = f"{float(auto['prezzo_vendita']):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
-        text_parts.append(f"💰 Prezzo: € {prezzo_formatted}")
-        
-        # ==========================================
-        # 5. CALL TO ACTION (Cliccabili)
-        # ==========================================
-        text_parts.append("")
-        text_parts.append(f"📞 Chiama ora: {PostGenerator.COMPANY_PHONE}")
-        
-        # WhatsApp link cliccabile
-        wa_link = f"https://wa.me/{PostGenerator.COMPANY_WHATSAPP}"
-        text_parts.append(f"💬 WhatsApp: {wa_link}")
-        
-        # Sito web
-        text_parts.append(f"🌐 Scopri di più: {PostGenerator.COMPANY_WEBSITE}")
-        
-        # ==========================================
-        # 6. HASHTAG E BRANDING
-        # ==========================================
-        text_parts.append("")
-        
-        # Aggiungi hashtag con marca
-        marca_hashtag = f"#{auto['marca'].replace(' ', '')}"
-        all_hashtags = [marca_hashtag] + PostGenerator.HASHTAGS
-        text_parts.append(" ".join(all_hashtags))
-        
-        return "\n".join(text_parts)
-    
-    @staticmethod
-    def generate_text_compact(auto: Dict) -> str:
-        """
-        Versione compatta del post (per limite caratteri o test A/B)
-        
-        Args:
-            auto: Dizionario con i dati dell'auto
-            
-        Returns:
-            Testo compatto formattato
-        """
+        # Formatta i dati chiave
         anno = auto.get('anno_immatricolazione', '')
         km = auto.get('chilometraggio', 0)
         km_formatted = f"{km:,}".replace(',', '.') if km else "N/D"
-        prezzo_formatted = f"{float(auto['prezzo_vendita']):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        prezzo = float(auto['prezzo_vendita'])
+        prezzo_formatted = f"{prezzo:,.0f}".replace(',', '.')
         
-        parts = [
-            f"🚗 {auto['marca']} {auto['modello']} {anno}",
-            f"🛣️ {km_formatted} km | ⛽ {auto.get('carburante', 'N/D')} | ⚙️ {auto.get('cambio', 'N/D')}",
-            f"💰 € {prezzo_formatted}",
-            "",
-            f"📞 {PostGenerator.COMPANY_PHONE}",
-            f"💬 https://wa.me/{PostGenerator.COMPANY_WHATSAPP}",
-        ]
+        # RIGA 1: Marca, Modello, Anno - MAX IMPATTO (sotto 80 char)
+        line1 = f"🚗 {auto['marca']} {auto['modello']} {anno}"
         
-        return "\n".join(parts)
+        # RIGA 2: Info chiave in formato ultra-compatto (sotto 60 char)
+        line2_parts = []
+        line2_parts.append(f"{km_formatted} km")
+        if auto.get('carburante'):
+            line2_parts.append(auto['carburante'])
+        if auto.get('cambio'):
+            line2_parts.append(auto['cambio'])
+        line2 = " • ".join(line2_parts)
+        
+        # RIGA 3: PREZZO - Elemento più importante (sotto 30 char)
+        line3 = f"💰 € {prezzo_formatted}"
+        
+        # RIGA 4: CTA cliccabile (sotto 50 char)
+        wa_link = f"https://wa.me/{PostGenerator.COMPANY_WHATSAPP}"
+        line4 = f"📲 {wa_link}"
+        
+        # Assemblaggio (totale ~125 caratteri - tutto visibile!)
+        text_parts = [line1, line2, line3, "", line4]
+        
+        # Aggiungi descrizione SE breve (max 1 riga)
+        if auto.get('descrizione'):
+            desc = auto['descrizione']
+            if len(desc) < 60:  # Solo se molto corta
+                text_parts.insert(2, f"\n{desc}")
+        
+        # Hashtag finali
+        marca_hashtag = f"#{auto['marca'].replace(' ', '')}"
+        hashtags = " ".join([marca_hashtag] + PostGenerator.HASHTAGS[:2])  # Max 3 hashtag
+        text_parts.append(hashtags)
+        
+        return "\n".join(text_parts)
 
 # ========================================
 # ORCHESTRATORE PRINCIPALE
@@ -502,6 +413,7 @@ class AutoPublisher:
             Numero di post pubblicati con successo
         """
         logger.info("🚀 Avvio Facebook Auto Publisher")
+        logger.info("📝 Formato: COMPACT (ottimizzato per feed)")
         
         # Carica auto da pubblicare
         autos = self.db.load_autos_to_publish(self.config.MAX_POSTS_PER_RUN)
@@ -519,7 +431,7 @@ class AutoPublisher:
             logger.info(f"{'='*60}")
             
             try:
-                # Genera testo del post
+                # Genera testo del post in formato compatto
                 post_text = self.post_gen.generate_text(auto)
                 
                 # Prepara lista immagini
@@ -534,6 +446,10 @@ class AutoPublisher:
                 
                 logger.info(f"📝 Lunghezza testo: {len(post_text)} caratteri")
                 logger.info(f"🖼️ Numero immagini: {len(images)}")
+                
+                # Mostra preview del testo visibile nel feed
+                preview = post_text[:130] + "..." if len(post_text) > 130 else post_text
+                logger.info(f"👁️ Preview feed:\n{preview}\n")
                 
                 # Pubblica su Facebook
                 result = self.fb.publish_post(post_text, images if images else None)
