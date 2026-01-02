@@ -166,7 +166,7 @@ class DatabaseManager:
                 for s in sample:
                     logger.info(f"   - ID:{s['auto_id']} {s['marca']} {s['modello']} | Stato:{s['stato']} | pubblicata_fb:{s['pubblicata_fb']}")
             
-            # 6. Query principale
+            # 6. Query principale - SOLO immagine_principale
             query = """
                 SELECT 
                     v.auto_id, 
@@ -192,17 +192,6 @@ class DatabaseManager:
             """
             cursor.execute(query, (max_posts,))
             autos = cursor.fetchall()
-            
-            # Carica le immagini aggiuntive per ogni auto
-            for auto in autos:
-                cursor.execute("""
-                    SELECT url_immagine
-                    FROM auto_vetrina_immagini
-                    WHERE auto_id = %s
-                    ORDER BY ordine ASC
-                """, (auto['auto_id'],))
-                imgs = cursor.fetchall()
-                auto['immagini_aggiuntive'] = [i['url_immagine'] for i in imgs] if imgs else []
             
             cursor.close()
             logger.info(f"📊 Caricate {len(autos)} auto da pubblicare")
@@ -471,18 +460,12 @@ class AutoPublisher:
                 # Genera testo del post
                 post_text = self.post_gen.generate_text(auto)
                 
-                # Prepara lista immagini
-                images = []
-                if auto.get('immagine_principale'):
-                    images.append(auto['immagine_principale'])
-                if auto.get('immagini_aggiuntive'):
-                    images.extend(auto['immagini_aggiuntive'])
-                
-                # Filtra immagini vuote o None
-                images = [img for img in images if img and img.strip()]
+                # Usa SOLO l'immagine principale di copertina
+                image_url = auto.get('immagine_principale')
+                images = [image_url] if image_url and image_url.strip() else None
                 
                 logger.info(f"📝 Lunghezza testo: {len(post_text)} caratteri")
-                logger.info(f"🖼️ Numero immagini: {len(images)}")
+                logger.info(f"🖼️ Immagine principale: {image_url if images else 'Nessuna'}")
                 
                 # Mostra preview
                 logger.info(f"👁️ Preview post:\n{post_text}\n")
@@ -490,7 +473,7 @@ class AutoPublisher:
                 # Pubblica su Facebook con CTA button
                 result = self.fb.publish_post(
                     text=post_text, 
-                    image_urls=images if images else None,
+                    image_urls=images,
                     cta_type=self.config.CTA_TYPE if self.config.CTA_TYPE else None,
                     cta_link=self.config.CTA_LINK if self.config.CTA_LINK else None
                 )
