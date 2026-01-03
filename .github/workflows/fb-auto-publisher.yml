@@ -51,8 +51,8 @@ jobs:
           
           # ========================================
           # MESSENGER LINK
-          # Link che apparirà sotto le immagini
-          # Facebook lo renderà cliccabile automaticamente
+          # Include nel testo dei post, Facebook lo rende cliccabile
+          # Non usare come parametro API (nasconderebbe le immagini!)
           # ========================================
           MESSENGER_LINK: "https://m.me/875722978961810"
           
@@ -81,8 +81,8 @@ jobs:
 # 📚 COME FUNZIONA - MULTI IMAGES + LINK
 # ==========================================
 #
-# INVECE DI: CTA Button (non supportato con carousel)
-# USIAMO: Link parameter (perfettamente supportato)
+# IMPORTANTE: Link NEL TESTO, non come parametro API!
+# Questo assicura che le immagini siano sempre visibili.
 #
 # RISULTATO SU FACEBOOK:
 # ┌─────────────────────────────────────┐
@@ -90,19 +90,24 @@ jobs:
 # │ 💰 10.990 € | 📏 222.000 km         │
 # │ [...Altro]                          │
 # ├─────────────────────────────────────┤
-# │ [📷 IMMAGINE 1] [📷 IMMAGINE 2]    │ ← CAROUSEL
-# │ [📷 IMMAGINE 3] [📷 IMMAGINE 4]    │ ← FINO A 4
+# │ [📷 1] [📷 2] [📷 3] [📷 4]        │ ← CAROUSEL
 # ├─────────────────────────────────────┤
-# │ 🔗 m.me/875722978961810             │ ← LINK CLICCABILE
-# │    (Messenger link preview)          │
+# │ [Espandi per vedere tutto]          │
+# │                                     │
+# │ 💬 CONTATTACI SU MESSENGER:        │
+# │ 👉 m.me/875722978961810 ← CLICK!   │ ← LINK CLICCABILE
+# │                                     │
+# │ 📱 Oppure su WhatsApp:             │
+# │ 👉 wa.me/393407346239              │
 # └─────────────────────────────────────┘
 #
 # VANTAGGI:
-# ✅ Fino a 4 immagini in carousel
-# ✅ Link Messenger prominente sotto le foto
-# ✅ Click diretto su Messenger
-# ✅ Nessun problema di compatibilità API
-# ✅ Visivamente più efficace del CTA button
+# ✅ Fino a 4 immagini in carousel scorrevole
+# ✅ Link Messenger cliccabile nel testo
+# ✅ Link WhatsApp alternativo
+# ✅ Nessun conflitto con link preview
+# ✅ Le immagini sono SEMPRE visibili
+# ✅ Mobile-friendly (link facile da tappare)
 #
 # ==========================================
 # 🗂️ REQUISITI DATABASE
