@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Facebook Auto Publisher - Optimized with CTA
-Pubblica annunci auto con CTA visibile e informazioni strategiche
+Facebook Auto Publisher - Complete Version
+Pubblica automaticamente annunci di auto da MySQL su pagina Facebook
+Con gestione immagini Supabase e CTA ottimizzato
 """
 import os
 import sys
@@ -18,6 +19,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ========================================
+# CONFIGURAZIONE LOGGING
+# ========================================
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
@@ -49,7 +53,7 @@ class Config:
     # CTA Configuration
     # Opzioni: "MESSAGE_PAGE" (Messenger) o "LEARN_MORE" (link sito)
     CTA_TYPE: str = os.getenv("CTA_TYPE", "MESSAGE_PAGE")
-    CTA_LINK: str = os.getenv("CTA_LINK", "https://www.mc-auto.it")
+    CTA_LINK: str = os.getenv("CTA_LINK", "https://m.me/875722978961810")
     
     # WhatsApp fallback (per inserire nel testo)
     WHATSAPP_NUMBER: str = os.getenv("WHATSAPP_NUMBER", "393407346239")
@@ -247,21 +251,13 @@ class FacebookPublisher:
     
     def publish_with_cta(self, message: str, image_urls: Optional[List[str]] = None) -> Dict:
         """
-        Pubblica post con immagini e CTA button - METODO CORRETTO
+        Pubblica post con immagini e CTA button - METODO COMPLETO
         
-        Basandoci sulle immagini fornite dall'utente, è POSSIBILE avere:
-        - Carousel di immagini
-        - CTA button "Messaggio" o "Scopri di più"
-        
-        Il metodo corretto è:
-        1. Upload immagini come "unpublished photos"
-        2. Crea post feed con attached_media
-        3. Aggiungi call_to_action
-        
-        NOTA: Se non funziona, potrebbe essere un problema con:
-        - URL immagini non accessibili da Facebook
-        - Token access non ha permessi sufficienti
-        - Formato URL immagine non supportato
+        Strategia doppio fallback:
+        1. Prova upload URL diretto
+        2. Se fallisce: scarica + re-upload come file
+        3. Aggiungi CTA se tutto ok
+        4. Se CTA fallisce: pubblica senza CTA
         """
         import json
         
@@ -337,7 +333,7 @@ class FacebookPublisher:
                         except Exception as file_error:
                             logger.error(f"       ❌ Anche upload file fallito: {file_error}")
                             continue
-                    
+                
                 except Exception as e:
                     logger.error(f"       ❌ Errore: {str(e)[:200]}")
                     continue
@@ -517,6 +513,10 @@ class AutoPublisher:
                 
                 logger.info(f"📝 Lunghezza testo: {len(post_text)} caratteri")
                 logger.info(f"🖼️ Immagini: {len(images) if images else 0}")
+                
+                if images:
+                    logger.info(f"📸 URL immagine: {images[0]}")
+                
                 logger.info(f"\n👁️ Preview (prime 3 righe visibili):")
                 preview_lines = post_text.split('\n')[:3]
                 logger.info('\n'.join(preview_lines))
