@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Facebook Auto Publisher - Marketplace Version
-Pubblica annunci auto usando il formato Marketplace per massima visibilità
+Facebook Auto Publisher - Optimized with CTA
+Pubblica annunci auto con CTA visibile e informazioni strategiche
 """
 import os
 import sys
@@ -46,7 +46,12 @@ class Config:
     FACEBOOK_ACCESS_TOKEN: str = os.getenv("FB_ACCESS_TOKEN", "")
     GRAPH_API_VERSION: str = "v18.0"
     
-    # WhatsApp (per link nel testo)
+    # CTA Configuration
+    # Opzioni: "MESSAGE_PAGE" (Messenger) o "LEARN_MORE" (link sito)
+    CTA_TYPE: str = os.getenv("CTA_TYPE", "MESSAGE_PAGE")
+    CTA_LINK: str = os.getenv("CTA_LINK", "https://www.mc-auto.it")
+    
+    # WhatsApp fallback (per inserire nel testo)
     WHATSAPP_NUMBER: str = os.getenv("WHATSAPP_NUMBER", "393407346239")
     
     # Limiti
@@ -77,6 +82,12 @@ class Config:
             errors.append("FB_PAGE_ID mancante")
         if not self.FACEBOOK_ACCESS_TOKEN:
             errors.append("FB_ACCESS_TOKEN mancante")
+        
+        # Valida CTA_TYPE
+        valid_cta_types = ["MESSAGE_PAGE", "LEARN_MORE", "SHOP_NOW", "CONTACT_US", "SIGN_UP"]
+        if self.CTA_TYPE not in valid_cta_types:
+            errors.append(f"CTA_TYPE non valido. Usa uno di: {', '.join(valid_cta_types)}")
+        
         return len(errors) == 0, errors
 
 # ========================================
@@ -208,15 +219,19 @@ class FacebookPublisher:
                 logger.error(f"Response: {e.response.text}")
             raise
     
-    def publish_marketplace_listing(self, auto: Dict, description: str, 
-                                   image_urls: Optional[List[str]] = None) -> Dict:
+    def publish_with_cta(self, message: str, image_urls: Optional[List[str]] = None) -> Dict:
         """
-        Pubblica come Vehicle Listing (formato Marketplace)
+        Pubblica post con immagini e CTA button
         
-        FORMATO OTTIMALE per vendita auto:
-        - Prezzo visibile sotto l'immagine
-        - Info strutturate (anno, km, località)
-        - Link cliccabile nel testo
+        STRATEGIA:
+        1. Upload immagini come unpublished
+        2. Crea post feed con immagini + messaggio
+        3. Aggiungi CTA button (Messenger o Link sito)
+        
+        VANTAGGI:
+        - CTA sempre visibile sotto il post
+        - Prezzo e km mostrati nella descrizione
+        - Pulsante "Messaggio" o "Scopri di più" ben evidente
         """
         import json
         
@@ -234,33 +249,32 @@ class FacebookPublisher:
                 result = self._make_request('POST', endpoint, data=payload)
                 media_ids.append({"media_fbid": result["id"]})
         
-        # 2. Crea il post come "link post" con prezzo e info strutturate
+        # 2. Crea il post con CTA
         endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/feed"
         
-        # Prezzo formattato
-        prezzo = float(auto['prezzo_vendita'])
-        prezzo_str = f"{prezzo:,.0f} €".replace(',', '.')
-        
-        # Anno e km
-        anno = auto.get('anno_immatricolazione', '')
-        km = auto.get('chilometraggio', 0)
-        km_str = f"{km:,}".replace(',', '.') if km else "0"
-        
-        # Costruisci il messaggio con link WhatsApp
-        whatsapp_text = f"Info su {auto['marca']} {auto['modello']}"
-        whatsapp_link = f"{self.config.whatsapp_link}?text={requests.utils.quote(whatsapp_text)}"
-        
         payload = {
-            "message": description,
+            "message": message,
             "access_token": self.config.FACEBOOK_ACCESS_TOKEN
         }
         
-        # Aggiungi immagini se presenti
+        # Aggiungi immagini
         if media_ids:
             payload["attached_media"] = json.dumps(media_ids)
         
-        # Pubblica il post
-        logger.info("  📤 Pubblicazione post...")
+        # Aggiungi CTA button
+        cta_config = {
+            "type": self.config.CTA_TYPE,
+            "value": {
+                "link": self.config.CTA_LINK
+            }
+        }
+        
+        payload["call_to_action"] = json.dumps(cta_config)
+        
+        logger.info(f"  🔘 CTA: {self.config.CTA_TYPE} → {self.config.CTA_LINK}")
+        
+        # 3. Pubblica
+        logger.info("  📤 Pubblicazione post con CTA...")
         result = self._make_request('POST', endpoint, data=payload)
         
         return result
@@ -274,79 +288,76 @@ class PostGenerator:
     def __init__(self, config: Config):
         self.config = config
     
-    def generate_listing_text(self, auto: Dict) -> str:
+    def generate_optimized_text(self, auto: Dict) -> str:
         """
-        Genera testo ottimizzato per vendita auto
+        Genera testo BREVE e STRATEGICO per Facebook
+        
+        STRATEGIA FACEBOOK:
+        - Testo breve (massimo 2-3 righe iniziali visibili)
+        - Prezzo e info chiave ALL'INIZIO (prima del "...Altro")
+        - Resto nascosto ma disponibile
+        - CTA button fa il lavoro pesante
         
         FORMATO:
-        - Titolo con emoji
-        - Prezzo GRANDE e VISIBILE
-        - Caratteristiche chiave
-        - Link WhatsApp per contatto
+        [EMOJI] Marca Modello Anno | Prezzo € | Km
+        [Caratteristiche chiave in 1-2 righe]
         """
         parts = []
         
-        # TITOLO
-        title = f"🚗 {auto['marca']} {auto['modello']}"
-        if auto.get('anno_immatricolazione'):
-            title += f" ({auto['anno_immatricolazione']})"
-        parts.append(title)
-        parts.append("")
-        
-        # PREZZO - MOLTO VISIBILE
+        # RIGA 1: Titolo compatto con PREZZO e KM
+        # Questo DEVE essere visibile prima del "...Altro"
         prezzo = float(auto['prezzo_vendita'])
         prezzo_str = f"{prezzo:,.0f}".replace(',', '.')
-        parts.append(f"💰 Prezzo: {prezzo_str} €")
+        
+        km = auto.get('chilometraggio', 0)
+        km_str = f"{km:,}".replace(',', '.') if km else "N/D"
+        
+        anno = auto.get('anno_immatricolazione', '')
+        anno_str = f"({anno})" if anno else ""
+        
+        # Linea 1: TUTTO ciò che è ESSENZIALE
+        line1 = f"🚗 {auto['marca']} {auto['modello']} {anno_str}"
+        parts.append(line1)
+        
+        # Linea 2: PREZZO e KM - MOLTO VISIBILI
+        line2 = f"💰 {prezzo_str} € | 📏 {km_str} km"
+        parts.append(line2)
         parts.append("")
         
-        # CARATTERISTICHE PRINCIPALI
-        specs = []
+        # RIGA 3-4: Caratteristiche chiave COMPATTE
+        specs_line = []
         
-        # Chilometraggio
-        if auto.get('chilometraggio'):
-            km = auto['chilometraggio']
-            km_str = f"{km:,}".replace(',', '.')
-            specs.append(f"📏 Chilometraggio: {km_str} km")
-        
-        # Carburante
         if auto.get('carburante'):
-            specs.append(f"⛽ Alimentazione: {auto['carburante']}")
+            specs_line.append(f"⛽ {auto['carburante']}")
         
-        # Cambio
         if auto.get('cambio'):
-            specs.append(f"⚙️ Cambio: {auto['cambio']}")
+            specs_line.append(f"⚙️ {auto['cambio']}")
         
-        # Potenza
         if auto.get('potenza_kw'):
             kw = auto['potenza_kw']
             cv = int(kw * 1.36)
-            specs.append(f"⚡ Potenza: {kw} kW ({cv} CV)")
+            specs_line.append(f"⚡ {cv} CV")
         
-        # Colore
-        if auto.get('colore'):
-            specs.append(f"🎨 Colore: {auto['colore']}")
+        if specs_line:
+            parts.append(" • ".join(specs_line))
         
-        if specs:
-            parts.extend(specs)
-            parts.append("")
-        
-        # DESCRIZIONE (se presente)
+        # DESCRIZIONE (opzionale, andrà sotto "...Altro")
         if auto.get('descrizione') and auto['descrizione'].strip():
             desc = auto['descrizione'].strip()
-            # Limita lunghezza descrizione
-            if len(desc) > 200:
-                desc = desc[:200] + "..."
-            parts.append(desc)
+            if len(desc) > 150:
+                desc = desc[:150] + "..."
             parts.append("")
+            parts.append(desc)
         
-        # CALL TO ACTION - Link WhatsApp
-        whatsapp_text = f"Info su {auto['marca']} {auto['modello']}"
-        whatsapp_link = f"{self.config.whatsapp_link}?text={requests.utils.quote(whatsapp_text)}"
-        
-        parts.append("📱 Contattaci subito su WhatsApp:")
-        parts.append(whatsapp_link)
+        # CALL TO ACTION testuale (opzionale, per chi espande)
         parts.append("")
         parts.append("✅ Auto verificata e pronta alla consegna")
+        
+        # WhatsApp come alternativa (sotto "Altro")
+        whatsapp_text = f"Info su {auto['marca']} {auto['modello']}"
+        whatsapp_link = f"{self.config.whatsapp_link}?text={requests.utils.quote(whatsapp_text)}"
+        parts.append("")
+        parts.append(f"📱 WhatsApp: {whatsapp_link}")
         
         return "\n".join(parts)
 
@@ -364,8 +375,9 @@ class AutoPublisher:
     
     def run(self) -> int:
         """Esegue il processo di pubblicazione"""
-        logger.info("🚀 Avvio Facebook Auto Publisher (Marketplace Format)")
-        logger.info(f"📱 WhatsApp: {self.config.whatsapp_link}")
+        logger.info("🚀 Avvio Facebook Auto Publisher (CTA Optimized)")
+        logger.info(f"🔘 CTA Type: {self.config.CTA_TYPE}")
+        logger.info(f"🔗 CTA Link: {self.config.CTA_LINK}")
         
         # Carica auto da pubblicare
         autos = self.db.load_autos_to_publish(self.config.MAX_POSTS_PER_RUN)
@@ -382,8 +394,8 @@ class AutoPublisher:
             logger.info(f"{'='*60}")
             
             try:
-                # Genera testo ottimizzato
-                post_text = self.post_gen.generate_listing_text(auto)
+                # Genera testo ottimizzato per Facebook
+                post_text = self.post_gen.generate_optimized_text(auto)
                 
                 # Prepara immagine
                 image_url = auto.get('immagine_principale')
@@ -391,17 +403,19 @@ class AutoPublisher:
                 
                 logger.info(f"📝 Lunghezza testo: {len(post_text)} caratteri")
                 logger.info(f"🖼️ Immagini: {len(images) if images else 0}")
-                logger.info(f"\n👁️ Preview:\n{post_text}\n")
+                logger.info(f"\n👁️ Preview (prime 3 righe visibili):")
+                preview_lines = post_text.split('\n')[:3]
+                logger.info('\n'.join(preview_lines))
+                logger.info(f"[...Altro]\n")
                 
-                # Pubblica su Facebook
-                result = self.fb.publish_marketplace_listing(
-                    auto=auto,
-                    description=post_text,
+                # Pubblica su Facebook con CTA
+                result = self.fb.publish_with_cta(
+                    message=post_text,
                     image_urls=images
                 )
                 
                 post_id = result.get('id', result.get('post_id', 'N/A'))
-                logger.info(f"✅ Post pubblicato! ID: {post_id}")
+                logger.info(f"✅ Post pubblicato con CTA! ID: {post_id}")
                 
                 # Aggiorna database
                 if self.db.update_publication_status(auto['auto_id'], post_id):
