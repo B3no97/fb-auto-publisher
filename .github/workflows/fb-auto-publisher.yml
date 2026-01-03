@@ -1,15 +1,15 @@
 # ==========================================
 # .github/workflows/fb-auto-publisher.yml
-# GitHub Actions Workflow - Marketplace Format
+# GitHub Actions Workflow - CTA Optimized
 # ==========================================
-name: Facebook Auto Publisher (Marketplace)
+name: Facebook Auto Publisher (CTA)
 
 on:
   schedule:
-    # Ogni 5 minuti per test - poi cambiare a orari specifici
+    # Test: ogni 5 minuti
     - cron: "*/5 * * * *"
-    # Produzione: 2 volte al giorno
-    # - cron: '0 9,15 * * *'  # 9:00 e 15:00 UTC
+    # Produzione: decommentare sotto
+    # - cron: '0 9,15 * * *'  # 9:00 e 15:00 UTC (10:00 e 16:00 Italia inverno)
   
   workflow_dispatch:
 
@@ -34,21 +34,51 @@ jobs:
       
       - name: 🚀 Run Facebook Auto Publisher
         env:
-          # Database
+          # ========================================
+          # DATABASE
+          # ========================================
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_PORT: ${{ secrets.DB_PORT }}
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           
-          # Facebook
+          # ========================================
+          # FACEBOOK
+          # ========================================
           FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           
-          # WhatsApp (numero senza + o spazi)
+          # ========================================
+          # SCELTA CTA (scegli UNA delle 3 opzioni)
+          # ========================================
+          
+          # OPZIONE 1: MESSENGER (CONSIGLIATA) ✅
+          # Pulsante "Messaggio" che apre Messenger
+          # Funziona sempre, nessuna autorizzazione richiesta
+          CTA_TYPE: "MESSAGE_PAGE"
+          CTA_LINK: "https://m.me/875722978961810"
+          
+          # OPZIONE 2: LINK AL SITO 🌐
+          # Pulsante "Scopri di più" che porta al sito
+          # Decommentare le 2 righe sotto e commentare OPZIONE 1
+          # CTA_TYPE: "LEARN_MORE"
+          # CTA_LINK: "https://www.mc-auto.it"
+          
+          # OPZIONE 3: CONTATTACI 📞
+          # Pulsante "Contattaci" che porta al sito
+          # Decommentare le 2 righe sotto e commentare OPZIONE 1
+          # CTA_TYPE: "CONTACT_US"
+          # CTA_LINK: "https://www.mc-auto.it/contatti"
+          
+          # ========================================
+          # WHATSAPP (numero per link nel testo)
+          # ========================================
           WHATSAPP_NUMBER: "393407346239"
           
-          # Configurazione
+          # ========================================
+          # CONFIGURAZIONE PUBBLICAZIONE
+          # ========================================
           MAX_POSTS: "5"
           
         run: |
@@ -61,3 +91,86 @@ jobs:
           name: fb-publisher-logs
           path: fb_publisher.log
           retention-days: 7
+
+# ==========================================
+# 📚 GUIDA SCELTA CTA
+# ==========================================
+#
+# 1️⃣ MESSAGE_PAGE (Messenger) - CONSIGLIATA ✅
+#    Perché: 
+#    - Funziona sempre senza setup
+#    - Pulsante "Messaggio" molto visibile
+#    - L'utente resta su Facebook
+#    - Conversazione immediata
+#    Quando: Sempre, è la scelta migliore
+#
+# 2️⃣ LEARN_MORE (Link sito) 🌐
+#    Perché:
+#    - Porta traffico al sito
+#    - Utile se hai form contatto o widget WhatsApp
+#    Quando: Se vuoi che l'utente veda più info sul sito
+#
+# 3️⃣ CONTACT_US (Contattaci) 📞
+#    Perché:
+#    - Porta direttamente alla pagina contatti
+#    - Utile se hai telefono/form/WhatsApp sul sito
+#    Quando: Se hai una pagina contatti ottimizzata
+#
+# ==========================================
+# ⚡ COME FUNZIONA
+# ==========================================
+#
+# POST FACEBOOK:
+# ┌─────────────────────────────────────┐
+# │ 🚗 Mercedes GLA (2014)              │
+# │ 💰 10.990 € | 📏 222.000 km         │ ← VISIBILE
+# │ ⛽ Diesel • ⚙️ Automatico • ⚡ 136CV │
+# │ [...Altro]                          │
+# ├─────────────────────────────────────┤
+# │ [IMMAGINE AUTO]                     │
+# ├─────────────────────────────────────┤
+# │          🔵 [Messaggio] ←           │ ← CTA BUTTON
+# └─────────────────────────────────────┘
+#
+# VANTAGGI:
+# ✅ Prezzo visibile prima del "...Altro"
+# ✅ Km visibili immediatamente
+# ✅ CTA button prominente sotto immagine
+# ✅ Click → conversazione immediata
+#
+# ==========================================
+# 🔧 MESSENGER: COME TROVARE IL TUO LINK
+# ==========================================
+#
+# Il link Messenger della tua pagina è:
+# https://m.me/[PAGE_USERNAME]
+#
+# Esempio con Page ID numerico:
+# https://m.me/875722978961810
+#
+# Per trovarlo:
+# 1. Vai sulla tua Pagina Facebook
+# 2. Clicca su "Informazioni"
+# 3. Cerca "@username" o usa il Page ID
+# 4. Link: https://m.me/[USERNAME_O_ID]
+#
+# ==========================================
+# 📅 SCHEDULE ALTERNATIVI
+# ==========================================
+#
+# Due volte al giorno (consigliato):
+# - cron: '0 9,15 * * *'
+#
+# Una volta al giorno:
+# - cron: '0 10 * * *'
+#
+# Tre volte al giorno:
+# - cron: '0 9,13,17 * * *'
+#
+# Solo giorni feriali:
+# - cron: '0 10 * * 1-5'
+#
+# Ogni 4 ore:
+# - cron: '0 */4 * * *'
+#
+# Tool: https://crontab.guru/
