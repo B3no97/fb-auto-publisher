@@ -1,8 +1,8 @@
 # ==========================================
 # .github/workflows/fb-auto-publisher.yml
-# GitHub Actions Workflow - CTA Optimized
+# GitHub Actions Workflow - Multi Images + Link
 # ==========================================
-name: Facebook Auto Publisher (CTA)
+name: Facebook Auto Publisher (Multi Images)
 
 on:
   schedule:
@@ -50,26 +50,11 @@ jobs:
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           
           # ========================================
-          # SCELTA CTA (scegli UNA delle 3 opzioni)
+          # MESSENGER LINK
+          # Link che apparirà sotto le immagini
+          # Facebook lo renderà cliccabile automaticamente
           # ========================================
-          
-          # OPZIONE 1: MESSENGER (CONSIGLIATA) ✅
-          # Pulsante "Messaggio" che apre Messenger
-          # Funziona sempre, nessuna autorizzazione richiesta
-          CTA_TYPE: "MESSAGE_PAGE"
-          CTA_LINK: "https://m.me/875722978961810"
-          
-          # OPZIONE 2: LINK AL SITO 🌐
-          # Pulsante "Scopri di più" che porta al sito
-          # Decommentare le 2 righe sotto e commentare OPZIONE 1
-          # CTA_TYPE: "LEARN_MORE"
-          # CTA_LINK: "https://www.mc-auto.it"
-          
-          # OPZIONE 3: CONTATTACI 📞
-          # Pulsante "Contattaci" che porta al sito
-          # Decommentare le 2 righe sotto e commentare OPZIONE 1
-          # CTA_TYPE: "CONTACT_US"
-          # CTA_LINK: "https://www.mc-auto.it/contatti"
+          MESSENGER_LINK: "https://m.me/875722978961810"
           
           # ========================================
           # WHATSAPP (numero per link nel testo)
@@ -93,53 +78,54 @@ jobs:
           retention-days: 7
 
 # ==========================================
-# 📚 GUIDA SCELTA CTA
+# 📚 COME FUNZIONA - MULTI IMAGES + LINK
 # ==========================================
 #
-# 1️⃣ MESSAGE_PAGE (Messenger) - CONSIGLIATA ✅
-#    Perché: 
-#    - Funziona sempre senza setup
-#    - Pulsante "Messaggio" molto visibile
-#    - L'utente resta su Facebook
-#    - Conversazione immediata
-#    Quando: Sempre, è la scelta migliore
+# INVECE DI: CTA Button (non supportato con carousel)
+# USIAMO: Link parameter (perfettamente supportato)
 #
-# 2️⃣ LEARN_MORE (Link sito) 🌐
-#    Perché:
-#    - Porta traffico al sito
-#    - Utile se hai form contatto o widget WhatsApp
-#    Quando: Se vuoi che l'utente veda più info sul sito
-#
-# 3️⃣ CONTACT_US (Contattaci) 📞
-#    Perché:
-#    - Porta direttamente alla pagina contatti
-#    - Utile se hai telefono/form/WhatsApp sul sito
-#    Quando: Se hai una pagina contatti ottimizzata
-#
-# ==========================================
-# ⚡ COME FUNZIONA
-# ==========================================
-#
-# POST FACEBOOK:
+# RISULTATO SU FACEBOOK:
 # ┌─────────────────────────────────────┐
 # │ 🚗 Mercedes GLA (2014)              │
-# │ 💰 10.990 € | 📏 222.000 km         │ ← VISIBILE
-# │ ⛽ Diesel • ⚙️ Automatico • ⚡ 136CV │
+# │ 💰 10.990 € | 📏 222.000 km         │
 # │ [...Altro]                          │
 # ├─────────────────────────────────────┤
-# │ [IMMAGINE AUTO]                     │
+# │ [📷 IMMAGINE 1] [📷 IMMAGINE 2]    │ ← CAROUSEL
+# │ [📷 IMMAGINE 3] [📷 IMMAGINE 4]    │ ← FINO A 4
 # ├─────────────────────────────────────┤
-# │          🔵 [Messaggio] ←           │ ← CTA BUTTON
+# │ 🔗 m.me/875722978961810             │ ← LINK CLICCABILE
+# │    (Messenger link preview)          │
 # └─────────────────────────────────────┘
 #
 # VANTAGGI:
-# ✅ Prezzo visibile prima del "...Altro"
-# ✅ Km visibili immediatamente
-# ✅ CTA button prominente sotto immagine
-# ✅ Click → conversazione immediata
+# ✅ Fino a 4 immagini in carousel
+# ✅ Link Messenger prominente sotto le foto
+# ✅ Click diretto su Messenger
+# ✅ Nessun problema di compatibilità API
+# ✅ Visivamente più efficace del CTA button
 #
 # ==========================================
-# 🔧 MESSENGER: COME TROVARE IL TUO LINK
+# 🗂️ REQUISITI DATABASE
+# ==========================================
+#
+# La tabella auto_vetrina deve avere questi campi:
+# - immagine_principale (VARCHAR/TEXT)
+# - immagine_2 (VARCHAR/TEXT)
+# - immagine_3 (VARCHAR/TEXT)
+# - immagine_4 (VARCHAR/TEXT)
+#
+# Se hai solo immagine_principale, lo script funziona ugualmente
+# con una sola immagine.
+#
+# Per aggiungere i campi mancanti (se necessario):
+#
+# ALTER TABLE auto_vetrina 
+#   ADD COLUMN immagine_2 TEXT NULL AFTER immagine_principale,
+#   ADD COLUMN immagine_3 TEXT NULL AFTER immagine_2,
+#   ADD COLUMN immagine_4 TEXT NULL AFTER immagine_3;
+#
+# ==========================================
+# 🔧 COME TROVARE IL TUO MESSENGER LINK
 # ==========================================
 #
 # Il link Messenger della tua pagina è:
@@ -153,6 +139,9 @@ jobs:
 # 2. Clicca su "Informazioni"
 # 3. Cerca "@username" o usa il Page ID
 # 4. Link: https://m.me/[USERNAME_O_ID]
+#
+# Oppure clicca sul pulsante "Messaggio" sulla tua pagina
+# e copia il link che si apre.
 #
 # ==========================================
 # 📅 SCHEDULE ALTERNATIVI
