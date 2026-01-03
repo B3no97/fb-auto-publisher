@@ -50,11 +50,9 @@ class Config:
     FACEBOOK_ACCESS_TOKEN: str = os.getenv("FB_ACCESS_TOKEN", "")
     GRAPH_API_VERSION: str = "v18.0"
     
-    # Link Messenger (mostrato sotto le immagini)
-    MESSENGER_LINK: str = os.getenv("MESSENGER_LINK", "https://m.me/875722978961810")
-    
-    # WhatsApp fallback
+    # Contatti
     WHATSAPP_NUMBER: str = os.getenv("WHATSAPP_NUMBER", "393407346239")
+    WEBSITE_URL: str = os.getenv("WEBSITE_URL", "mc-auto.it")
     
     # Limiti
     MAX_POSTS_PER_RUN: int = int(os.getenv("MAX_POSTS", "1"))
@@ -84,8 +82,8 @@ class Config:
             errors.append("FB_PAGE_ID mancante")
         if not self.FACEBOOK_ACCESS_TOKEN:
             errors.append("FB_ACCESS_TOKEN mancante")
-        if not self.MESSENGER_LINK:
-            errors.append("MESSENGER_LINK mancante")
+        if not self.WHATSAPP_NUMBER:
+            errors.append("WHATSAPP_NUMBER mancante")
         
         return len(errors) == 0, errors
 
@@ -386,7 +384,6 @@ class FacebookPublisher:
             }
             
             logger.info("  📤 Pubblicazione post con carousel...")
-            logger.info("  💡 Link Messenger incluso nel testo (auto-cliccabile)")
             
             result = self._make_request('POST', endpoint, data=payload)
             return result
@@ -394,7 +391,6 @@ class FacebookPublisher:
         # Nessuna immagine - post testuale
         else:
             logger.info("  📝 Pubblicazione post testuale")
-            logger.info("  💡 Link Messenger incluso nel testo (auto-cliccabile)")
             
             payload = {
                 "message": message,
@@ -417,62 +413,54 @@ class PostGenerator:
     def generate_optimized_text(self, auto: Dict) -> str:
         """
         Genera testo ottimizzato per Facebook
-        Il link Messenger nel testo diventa automaticamente cliccabile
+        Formato compatto e professionale
         """
         parts = []
         
         # RIGA 1: Titolo
-        prezzo = float(auto['prezzo_vendita'])
-        prezzo_str = f"{prezzo:,.0f}".replace(',', '.')
-        
-        km = auto.get('chilometraggio', 0)
-        km_str = f"{km:,}".replace(',', '.') if km else "N/D"
-        
         anno = auto.get('anno_immatricolazione', '')
         anno_str = f"({anno})" if anno else ""
-        
         parts.append(f"🚗 {auto['marca']} {auto['modello']} {anno_str}")
-        parts.append(f"💰 {prezzo_str} € | 📏 {km_str} km")
-        parts.append("")
         
-        # Caratteristiche
-        specs_line = []
+        # RIGA 2: Prezzo e Km - TUTTO SU UNA RIGA
+        prezzo = float(auto['prezzo_vendita'])
+        prezzo_str = f"{prezzo:,.0f}".replace(',', '.')
+        km = auto.get('chilometraggio', 0)
+        km_str = f"{km:,}".replace(',', '.') if km else "N/D"
+        parts.append(f"💰 {prezzo_str} € • 📏 {km_str} km")
         
+        # RIGA 3: Caratteristiche tecniche - TUTTO SU UNA RIGA
+        specs = []
         if auto.get('carburante'):
-            specs_line.append(f"⛽ {auto['carburante']}")
-        
+            specs.append(auto['carburante'].upper())
         if auto.get('cambio'):
-            specs_line.append(f"⚙️ {auto['cambio']}")
-        
+            specs.append(auto['cambio'].upper())
         if auto.get('potenza_kw'):
             kw = auto['potenza_kw']
             cv = int(kw * 1.36)
-            specs_line.append(f"⚡ {cv} CV")
+            specs.append(f"{cv} CV")
         
-        if specs_line:
-            parts.append(" • ".join(specs_line))
+        if specs:
+            parts.append(" • ".join(specs))
         
-        # Descrizione
+        # Descrizione COMPLETA (senza limite caratteri)
         if auto.get('descrizione') and auto['descrizione'].strip():
-            desc = auto['descrizione'].strip()
-            if len(desc) > 150:
-                desc = desc[:150] + "..."
             parts.append("")
-            parts.append(desc)
+            parts.append(auto['descrizione'].strip())
         
-        # Call to action PROMINENTE con link
-        parts.append("")
-        parts.append("✅ Auto verificata e pronta alla consegna")
-        parts.append("")
-        parts.append("💬 CONTATTACI SU MESSENGER:")
-        parts.append(f"👉 {self.config.MESSENGER_LINK}")
+        # Contatti
+        # Formatta numero WhatsApp (rimuovi prefisso internazionale per display)
+        wa_number = self.config.WHATSAPP_NUMBER
+        if wa_number.startswith('39'):
+            wa_display = f"+39 {wa_number[2:5]} {wa_number[5:8]} {wa_number[8:]}"
+        else:
+            wa_display = f"+{wa_number}"
         
-        # WhatsApp alternativo
-        whatsapp_text = f"Info su {auto['marca']} {auto['modello']}"
-        whatsapp_link = f"{self.config.whatsapp_link}?text={requests.utils.quote(whatsapp_text)}"
         parts.append("")
-        parts.append(f"📱 Oppure su WhatsApp:")
-        parts.append(f"👉 {whatsapp_link}")
+        parts.append(f"📱 WhatsApp: {wa_display}")
+        parts.append(f"https://wa.me/{wa_number}")
+        parts.append("")
+        parts.append(f"🌐 Per maggiori dettagli: {self.config.WEBSITE_URL}")
         
         return "\n".join(parts)
 
@@ -490,10 +478,10 @@ class AutoPublisher:
     
     def run(self) -> int:
         """Esegue il processo di pubblicazione"""
-        logger.info("🚀 Avvio Facebook Auto Publisher (Multi Images)")
-        logger.info(f"💬 Link Messenger (nel testo): {self.config.MESSENGER_LINK}")
+        logger.info("🚀 Avvio Facebook Auto Publisher")
+        logger.info(f"📱 WhatsApp: +39 {self.config.WHATSAPP_NUMBER[2:]}")  # Rimuovi prefisso 39
+        logger.info(f"🌐 Sito web: {self.config.WEBSITE_URL}")
         logger.info(f"🖼️  Max immagini per post: {self.config.MAX_IMAGES_PER_POST}")
-        logger.info("💡 I link nel testo diventano automaticamente cliccabili su Facebook")
         
         # Carica auto da pubblicare
         autos = self.db.load_autos_to_publish(self.config.MAX_POSTS_PER_RUN)
@@ -538,7 +526,7 @@ class AutoPublisher:
                 
                 post_id = result.get('id', result.get('post_id', 'N/A'))
                 logger.info(f"✅ Post pubblicato! ID: {post_id}")
-                logger.info(f"   📸 {len(images)} immagini | 💬 Link cliccabile nel testo")
+                logger.info(f"   📸 {len(images)} immagini | 📱 Contatto WhatsApp")
                 
                 # Aggiorna database
                 if self.db.update_publication_status(auto['auto_id'], post_id):
