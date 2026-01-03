@@ -219,87 +219,143 @@ class FacebookPublisher:
                 logger.error(f"Response: {e.response.text}")
             raise
     
+    def _verify_image_url(self, url: str) -> bool:
+        """
+        Verifica che l'immagine sia accessibile pubblicamente
+        Importante per URL Supabase o altri storage cloud
+        """
+        try:
+            logger.info(f"      🔍 Test accessibilità immagine...")
+            response = requests.head(url, timeout=10, allow_redirects=True)
+            
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '')
+                if 'image' in content_type.lower():
+                    logger.info(f"      ✅ Immagine accessibile ({content_type})")
+                    return True
+                else:
+                    logger.warning(f"      ⚠️  URL non restituisce immagine: {content_type}")
+                    return False
+            else:
+                logger.warning(f"      ⚠️  HTTP {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.warning(f"      ⚠️  Test fallito: {e}")
+            # Proviamo comunque, potrebbe funzionare con Facebook
+            return True
+    
     def publish_with_cta(self, message: str, image_urls: Optional[List[str]] = None) -> Dict:
         """
-        Pubblica post con immagini e CTA button
+        Pubblica post con immagini e CTA button - METODO CORRETTO
         
-        STRATEGIA CORRETTA per CTA + Immagini:
-        1. Se c'è UN'immagine: usa link post con picture (mostra immagine + CTA)
-        2. Se ci sono PIÙ immagini: pubblica carousel senza CTA (Facebook non supporta CTA su carousel)
-        3. Se non ci sono immagini: post testuale con CTA
+        Basandoci sulle immagini fornite dall'utente, è POSSIBILE avere:
+        - Carousel di immagini
+        - CTA button "Messaggio" o "Scopri di più"
         
-        IMPORTANTE: Facebook mostra CTA solo su link posts, non su photo posts con attached_media
+        Il metodo corretto è:
+        1. Upload immagini come "unpublished photos"
+        2. Crea post feed con attached_media
+        3. Aggiungi call_to_action
+        
+        NOTA: Se non funziona, potrebbe essere un problema con:
+        - URL immagini non accessibili da Facebook
+        - Token access non ha permessi sufficienti
+        - Formato URL immagine non supportato
         """
         import json
         
         endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/feed"
         
-        # CASO 1: Una singola immagine - usa link post con picture
-        if image_urls and len(image_urls) == 1:
-            logger.info("  📸 Pubblicazione con immagine singola + CTA")
+        if image_urls and len(image_urls) >= 1:
+            logger.info(f"  📸 Upload di {len(image_urls)} immagine/i come unpublished")
             
-            payload = {
-                "message": message,
-                "link": self.config.CTA_LINK,  # Link è obbligatorio per CTA
-                "picture": image_urls[0],      # Immagine come preview del link
-                "access_token": self.config.FACEBOOK_ACCESS_TOKEN
-            }
-            
-            # Aggiungi CTA button
-            cta_config = {
-                "type": self.config.CTA_TYPE,
-                "value": {
-                    "link": self.config.CTA_LINK
-                }
-            }
-            payload["call_to_action"] = json.dumps(cta_config)
-            
-            logger.info(f"  🔘 CTA: {self.config.CTA_TYPE} → {self.config.CTA_LINK}")
-            logger.info("  📤 Pubblicazione link post con immagine e CTA...")
-            
-            result = self._make_request('POST', endpoint, data=payload)
-            return result
-        
-        # CASO 2: Più immagini - carousel SENZA CTA (Facebook non supporta CTA su carousel)
-        elif image_urls and len(image_urls) > 1:
-            logger.info(f"  📸 Pubblicazione carousel con {len(image_urls)} immagini (no CTA)")
-            logger.warning("  ⚠️ Facebook non supporta CTA su carousel - pubblico solo immagini")
-            
-            # Upload immagini come unpublished
+            # Step 1: Upload immagini come unpublished photos
             media_ids = []
             for idx, url in enumerate(image_urls[:self.config.MAX_IMAGES_PER_POST], 1):
-                logger.info(f"    📷 Upload immagine {idx}/{len(image_urls)}")
-                photo_endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/photos"
-                photo_payload = {
-                    "url": url,
-                    "published": "false",
-                    "access_token": self.config.FACEBOOK_ACCESS_TOKEN
-                }
-                result = self._make_request('POST', photo_endpoint, data=photo_payload)
-                media_ids.append({"media_fbid": result["id"]})
+                try:
+                    logger.info(f"    📷 [{idx}/{len(image_urls)}] Processing...")
+                    logger.info(f"       URL: {url}")
+                    
+                    # Verifica che l'URL sia valido
+                    if not url or not url.startswith(('http://', 'https://')):
+                        logger.warning(f"       ⚠️  URL non valido, skip")
+                        continue
+                    
+                    # Test accessibilità (importante per Supabase)
+                    self._verify_image_url(url)
+                    
+                    # Upload a Facebook
+                    logger.info(f"       📤 Upload a Facebook (tentativo URL)...")
+                    photo_endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/photos"
+                    photo_payload = {
+                        "url": url,
+                        "published": "false",
+                        "access_token": self.config.FACEBOOK_ACCESS_TOKEN
+                    }
+                    
+                    try:
+                        result = self._make_request('POST', photo_endpoint, data=photo_payload)
+                        media_id = result.get("id")
+                        
+                        if media_id:
+                            media_ids.append({"media_fbid": media_id})
+                            logger.info(f"       ✅ Upload OK - Media ID: {media_id}")
+                        else:
+                            logger.warning(f"       ⚠️  Nessun ID ricevuto")
+                    
+                    except Exception as upload_error:
+                        # Fallback: Scarica immagine e ricaricala come file
+                        logger.warning(f"       ⚠️  Upload URL fallito: {upload_error}")
+                        logger.info(f"       🔄 Tentativo alternativo: download + upload file...")
+                        
+                        try:
+                            # Scarica l'immagine
+                            img_response = requests.get(url, timeout=30)
+                            img_response.raise_for_status()
+                            
+                            # Upload come file binario
+                            files = {
+                                'source': ('image.jpg', img_response.content, 'image/jpeg')
+                            }
+                            data = {
+                                'published': 'false',
+                                'access_token': self.config.FACEBOOK_ACCESS_TOKEN
+                            }
+                            
+                            response = requests.post(photo_endpoint, files=files, data=data, timeout=30)
+                            response.raise_for_status()
+                            result = response.json()
+                            
+                            media_id = result.get("id")
+                            if media_id:
+                                media_ids.append({"media_fbid": media_id})
+                                logger.info(f"       ✅ Upload file OK - Media ID: {media_id}")
+                            else:
+                                logger.error(f"       ❌ Upload file fallito: nessun ID")
+                        
+                        except Exception as file_error:
+                            logger.error(f"       ❌ Anche upload file fallito: {file_error}")
+                            continue
+                    
+                except Exception as e:
+                    logger.error(f"       ❌ Errore: {str(e)[:200]}")
+                    continue
             
-            # Pubblica carousel
+            if not media_ids:
+                logger.error("  ❌ Nessuna immagine caricata con successo!")
+                raise Exception("Impossibile caricare le immagini")
+            
+            logger.info(f"  ✅ {len(media_ids)} immagini caricate correttamente")
+            
+            # Step 2: Crea post con immagini + CTA
             payload = {
                 "message": message,
                 "attached_media": json.dumps(media_ids),
                 "access_token": self.config.FACEBOOK_ACCESS_TOKEN
             }
             
-            logger.info("  📤 Pubblicazione carousel...")
-            result = self._make_request('POST', endpoint, data=payload)
-            return result
-        
-        # CASO 3: Nessuna immagine - solo testo con CTA
-        else:
-            logger.info("  📝 Pubblicazione solo testo con CTA")
-            
-            payload = {
-                "message": message,
-                "link": self.config.CTA_LINK,
-                "access_token": self.config.FACEBOOK_ACCESS_TOKEN
-            }
-            
-            # Aggiungi CTA button
+            # Step 3: Aggiungi CTA button
             cta_config = {
                 "type": self.config.CTA_TYPE,
                 "value": {
@@ -309,8 +365,35 @@ class FacebookPublisher:
             payload["call_to_action"] = json.dumps(cta_config)
             
             logger.info(f"  🔘 CTA: {self.config.CTA_TYPE} → {self.config.CTA_LINK}")
-            logger.info("  📤 Pubblicazione post testuale con CTA...")
+            logger.info("  📤 Pubblicazione post con carousel + CTA...")
             
+            try:
+                result = self._make_request('POST', endpoint, data=payload)
+                return result
+            except Exception as e:
+                logger.error(f"  ❌ Errore pubblicazione con CTA: {e}")
+                logger.info("  🔄 Tentativo pubblicazione SENZA CTA come fallback...")
+                
+                # Fallback: pubblica senza CTA
+                payload_no_cta = {
+                    "message": message,
+                    "attached_media": json.dumps(media_ids),
+                    "access_token": self.config.FACEBOOK_ACCESS_TOKEN
+                }
+                result = self._make_request('POST', endpoint, data=payload_no_cta)
+                logger.warning("  ⚠️  Post pubblicato SENZA CTA")
+                return result
+        
+        # Nessuna immagine - post testuale
+        else:
+            logger.info("  📝 Pubblicazione post testuale (nessuna immagine)")
+            
+            payload = {
+                "message": message,
+                "access_token": self.config.FACEBOOK_ACCESS_TOKEN
+            }
+            
+            logger.info("  📤 Pubblicazione...")
             result = self._make_request('POST', endpoint, data=payload)
             return result
 
@@ -325,22 +408,17 @@ class PostGenerator:
     
     def generate_optimized_text(self, auto: Dict) -> str:
         """
-        Genera testo BREVE e STRATEGICO per Facebook
+        Genera testo OTTIMIZZATO per Facebook con link Messenger PROMINENTE
         
-        STRATEGIA FACEBOOK:
-        - Testo breve (massimo 2-3 righe iniziali visibili)
-        - Prezzo e info chiave ALL'INIZIO (prima del "...Altro")
-        - Resto nascosto ma disponibile
-        - CTA button fa il lavoro pesante
-        
-        FORMATO:
-        [EMOJI] Marca Modello Anno | Prezzo € | Km
-        [Caratteristiche chiave in 1-2 righe]
+        STRATEGIA:
+        - Prime 2-3 righe: Titolo + Prezzo + Km (visibili prima di "...Altro")
+        - Caratteristiche chiave compatte
+        - Link Messenger GRANDE e VISIBILE subito dopo le info principali
+        - Facebook renderà il link automaticamente cliccabile
         """
         parts = []
         
-        # RIGA 1: Titolo compatto con PREZZO e KM
-        # Questo DEVE essere visibile prima del "...Altro"
+        # RIGA 1: Titolo
         prezzo = float(auto['prezzo_vendita'])
         prezzo_str = f"{prezzo:,.0f}".replace(',', '.')
         
@@ -350,16 +428,17 @@ class PostGenerator:
         anno = auto.get('anno_immatricolazione', '')
         anno_str = f"({anno})" if anno else ""
         
-        # Linea 1: TUTTO ciò che è ESSENZIALE
-        line1 = f"🚗 {auto['marca']} {auto['modello']} {anno_str}"
-        parts.append(line1)
-        
-        # Linea 2: PREZZO e KM - MOLTO VISIBILI
-        line2 = f"💰 {prezzo_str} € | 📏 {km_str} km"
-        parts.append(line2)
+        # Titolo + Prezzo + Km - TUTTO VISIBILE prima di "...Altro"
+        parts.append(f"🚗 {auto['marca']} {auto['modello']} {anno_str}")
+        parts.append(f"💰 {prezzo_str} € | 📏 {km_str} km")
         parts.append("")
         
-        # RIGA 3-4: Caratteristiche chiave COMPATTE
+        # LINK MESSENGER - SUBITO VISIBILE (prima di "...Altro")
+        parts.append("👉 CONTATTACI SU MESSENGER:")
+        parts.append(self.config.CTA_LINK)
+        parts.append("")
+        
+        # Caratteristiche (andranno sotto "...Altro" ma visibili espandendo)
         specs_line = []
         
         if auto.get('carburante'):
@@ -376,7 +455,7 @@ class PostGenerator:
         if specs_line:
             parts.append(" • ".join(specs_line))
         
-        # DESCRIZIONE (opzionale, andrà sotto "...Altro")
+        # Descrizione dettagliata (sotto "...Altro")
         if auto.get('descrizione') and auto['descrizione'].strip():
             desc = auto['descrizione'].strip()
             if len(desc) > 150:
@@ -384,15 +463,15 @@ class PostGenerator:
             parts.append("")
             parts.append(desc)
         
-        # CALL TO ACTION testuale (opzionale, per chi espande)
+        # Call to action finale
         parts.append("")
         parts.append("✅ Auto verificata e pronta alla consegna")
         
-        # WhatsApp come alternativa (sotto "Altro")
+        # WhatsApp alternativo (per chi preferisce)
         whatsapp_text = f"Info su {auto['marca']} {auto['modello']}"
         whatsapp_link = f"{self.config.whatsapp_link}?text={requests.utils.quote(whatsapp_text)}"
         parts.append("")
-        parts.append(f"📱 WhatsApp: {whatsapp_link}")
+        parts.append(f"📱 Oppure scrivici su WhatsApp: {whatsapp_link}")
         
         return "\n".join(parts)
 
