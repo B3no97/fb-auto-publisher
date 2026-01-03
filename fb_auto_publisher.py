@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Facebook Auto Publisher - Complete Version
+Facebook Auto Publisher - Multi Images Version
 Pubblica automaticamente annunci di auto da MySQL su pagina Facebook
-Con gestione immagini Supabase e CTA ottimizzato
+Con supporto fino a 4 immagini e link Messenger integrato
 """
 import os
 import sys
@@ -50,17 +50,15 @@ class Config:
     FACEBOOK_ACCESS_TOKEN: str = os.getenv("FB_ACCESS_TOKEN", "")
     GRAPH_API_VERSION: str = "v18.0"
     
-    # CTA Configuration
-    # Opzioni: "MESSAGE_PAGE" (Messenger) o "LEARN_MORE" (link sito)
-    CTA_TYPE: str = os.getenv("CTA_TYPE", "MESSAGE_PAGE")
-    CTA_LINK: str = os.getenv("CTA_LINK", "https://m.me/875722978961810")
+    # Link Messenger (mostrato sotto le immagini)
+    MESSENGER_LINK: str = os.getenv("MESSENGER_LINK", "https://m.me/875722978961810")
     
-    # WhatsApp fallback (per inserire nel testo)
+    # WhatsApp fallback
     WHATSAPP_NUMBER: str = os.getenv("WHATSAPP_NUMBER", "393407346239")
     
     # Limiti
     MAX_POSTS_PER_RUN: int = int(os.getenv("MAX_POSTS", "1"))
-    MAX_IMAGES_PER_POST: int = 10
+    MAX_IMAGES_PER_POST: int = 4  # Fino a 4 immagini
     REQUEST_TIMEOUT: int = 30
     
     @property
@@ -86,11 +84,8 @@ class Config:
             errors.append("FB_PAGE_ID mancante")
         if not self.FACEBOOK_ACCESS_TOKEN:
             errors.append("FB_ACCESS_TOKEN mancante")
-        
-        # Valida CTA_TYPE
-        valid_cta_types = ["MESSAGE_PAGE", "LEARN_MORE", "SHOP_NOW", "CONTACT_US", "SIGN_UP"]
-        if self.CTA_TYPE not in valid_cta_types:
-            errors.append(f"CTA_TYPE non valido. Usa uno di: {', '.join(valid_cta_types)}")
+        if not self.MESSENGER_LINK:
+            errors.append("MESSENGER_LINK mancante")
         
         return len(errors) == 0, errors
 
@@ -133,12 +128,13 @@ class DatabaseManager:
             raise
     
     def load_autos_to_publish(self, max_posts: int) -> List[Dict]:
-        """Carica le auto non ancora pubblicate"""
+        """Carica le auto non ancora pubblicate CON TUTTE LE IMMAGINI"""
         conn = None
         try:
             conn = self.get_connection()
             cursor = conn.cursor(dictionary=True)
             
+            # Query principale per le auto
             query = """
                 SELECT 
                     v.auto_id, 
@@ -154,7 +150,10 @@ class DatabaseManager:
                     a.cilindrata_cc,
                     v.descrizione, 
                     v.prezzo_vendita,
-                    v.immagine_principale
+                    v.immagine_principale,
+                    v.immagine_2,
+                    v.immagine_3,
+                    v.immagine_4
                 FROM auto_vetrina v
                 JOIN auto a ON v.auto_id = a.id
                 WHERE v.pubblicata_fb = 0 
@@ -164,6 +163,22 @@ class DatabaseManager:
             """
             cursor.execute(query, (max_posts,))
             autos = cursor.fetchall()
+            
+            # Per ogni auto, raccogli tutte le immagini disponibili
+            for auto in autos:
+                images = []
+                for i in range(1, 5):  # immagine_principale, immagine_2, 3, 4
+                    if i == 1:
+                        img_url = auto.get('immagine_principale')
+                    else:
+                        img_url = auto.get(f'immagine_{i}')
+                    
+                    if img_url and img_url.strip():
+                        images.append(img_url.strip())
+                
+                auto['all_images'] = images
+                logger.info(f"  📸 {auto['marca']} {auto['modello']}: {len(images)} immagini trovate")
+            
             cursor.close()
             logger.info(f"📊 Caricate {len(autos)} auto da pubblicare")
             return autos
@@ -224,10 +239,7 @@ class FacebookPublisher:
             raise
     
     def _verify_image_url(self, url: str) -> bool:
-        """
-        Verifica che l'immagine sia accessibile pubblicamente
-        Importante per URL Supabase o altri storage cloud
-        """
+        """Verifica che l'immagine sia accessibile pubblicamente"""
         try:
             logger.info(f"      🔍 Test accessibilità immagine...")
             response = requests.head(url, timeout=10, allow_redirects=True)
@@ -246,43 +258,44 @@ class FacebookPublisher:
                 
         except Exception as e:
             logger.warning(f"      ⚠️  Test fallito: {e}")
-            # Proviamo comunque, potrebbe funzionare con Facebook
             return True
     
-    def publish_with_cta(self, message: str, image_urls: Optional[List[str]] = None) -> Dict:
+    def publish_with_link(self, message: str, image_urls: Optional[List[str]] = None) -> Dict:
         """
-        Pubblica post con immagini e CTA button - METODO COMPLETO
+        Pubblica post con immagini multiple e link Messenger
         
-        Strategia doppio fallback:
-        1. Prova upload URL diretto
-        2. Se fallisce: scarica + re-upload come file
-        3. Aggiungi CTA se tutto ok
-        4. Se CTA fallisce: pubblica senza CTA
+        STRATEGIA:
+        1. Carica fino a 4 immagini come unpublished
+        2. Crea post con carousel + link Messenger
+        3. Facebook mostrerà: Immagini + Link cliccabile sotto
+        
+        Questo approccio funziona meglio del CTA button con multiple immagini
         """
         import json
         
         endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/feed"
         
         if image_urls and len(image_urls) >= 1:
-            logger.info(f"  📸 Upload di {len(image_urls)} immagine/i come unpublished")
+            # Limita a MAX_IMAGES_PER_POST
+            images_to_upload = image_urls[:self.config.MAX_IMAGES_PER_POST]
+            logger.info(f"  📸 Upload di {len(images_to_upload)} immagine/i...")
             
             # Step 1: Upload immagini come unpublished photos
             media_ids = []
-            for idx, url in enumerate(image_urls[:self.config.MAX_IMAGES_PER_POST], 1):
+            for idx, url in enumerate(images_to_upload, 1):
                 try:
-                    logger.info(f"    📷 [{idx}/{len(image_urls)}] Processing...")
-                    logger.info(f"       URL: {url}")
+                    logger.info(f"    📷 [{idx}/{len(images_to_upload)}] Processing...")
+                    logger.info(f"       URL: {url[:80]}...")
                     
-                    # Verifica che l'URL sia valido
                     if not url or not url.startswith(('http://', 'https://')):
                         logger.warning(f"       ⚠️  URL non valido, skip")
                         continue
                     
-                    # Test accessibilità (importante per Supabase)
+                    # Test accessibilità
                     self._verify_image_url(url)
                     
                     # Upload a Facebook
-                    logger.info(f"       📤 Upload a Facebook (tentativo URL)...")
+                    logger.info(f"       📤 Upload a Facebook...")
                     photo_endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/photos"
                     photo_payload = {
                         "url": url,
@@ -301,16 +314,14 @@ class FacebookPublisher:
                             logger.warning(f"       ⚠️  Nessun ID ricevuto")
                     
                     except Exception as upload_error:
-                        # Fallback: Scarica immagine e ricaricala come file
+                        # Fallback: Download + Upload come file
                         logger.warning(f"       ⚠️  Upload URL fallito: {upload_error}")
-                        logger.info(f"       🔄 Tentativo alternativo: download + upload file...")
+                        logger.info(f"       🔄 Tentativo download + upload file...")
                         
                         try:
-                            # Scarica l'immagine
                             img_response = requests.get(url, timeout=30)
                             img_response.raise_for_status()
                             
-                            # Upload come file binario
                             files = {
                                 'source': ('image.jpg', img_response.content, 'image/jpeg')
                             }
@@ -344,48 +355,27 @@ class FacebookPublisher:
             
             logger.info(f"  ✅ {len(media_ids)} immagini caricate correttamente")
             
-            # Step 2: Crea post con immagini + CTA
+            # Step 2: Crea post con immagini + LINK
             payload = {
                 "message": message,
                 "attached_media": json.dumps(media_ids),
+                "link": self.config.MESSENGER_LINK,  # ⭐ LINK invece di call_to_action
                 "access_token": self.config.FACEBOOK_ACCESS_TOKEN
             }
             
-            # Step 3: Aggiungi CTA button
-            cta_config = {
-                "type": self.config.CTA_TYPE,
-                "value": {
-                    "link": self.config.CTA_LINK
-                }
-            }
-            payload["call_to_action"] = json.dumps(cta_config)
+            logger.info(f"  🔗 Link Messenger: {self.config.MESSENGER_LINK}")
+            logger.info("  📤 Pubblicazione post con carousel + link...")
             
-            logger.info(f"  🔘 CTA: {self.config.CTA_TYPE} → {self.config.CTA_LINK}")
-            logger.info("  📤 Pubblicazione post con carousel + CTA...")
-            
-            try:
-                result = self._make_request('POST', endpoint, data=payload)
-                return result
-            except Exception as e:
-                logger.error(f"  ❌ Errore pubblicazione con CTA: {e}")
-                logger.info("  🔄 Tentativo pubblicazione SENZA CTA come fallback...")
-                
-                # Fallback: pubblica senza CTA
-                payload_no_cta = {
-                    "message": message,
-                    "attached_media": json.dumps(media_ids),
-                    "access_token": self.config.FACEBOOK_ACCESS_TOKEN
-                }
-                result = self._make_request('POST', endpoint, data=payload_no_cta)
-                logger.warning("  ⚠️  Post pubblicato SENZA CTA")
-                return result
+            result = self._make_request('POST', endpoint, data=payload)
+            return result
         
-        # Nessuna immagine - post testuale
+        # Nessuna immagine - post testuale con link
         else:
-            logger.info("  📝 Pubblicazione post testuale (nessuna immagine)")
+            logger.info("  📝 Pubblicazione post testuale con link")
             
             payload = {
                 "message": message,
+                "link": self.config.MESSENGER_LINK,
                 "access_token": self.config.FACEBOOK_ACCESS_TOKEN
             }
             
@@ -404,13 +394,7 @@ class PostGenerator:
     
     def generate_optimized_text(self, auto: Dict) -> str:
         """
-        Genera testo OTTIMIZZATO per Facebook con link Messenger PROMINENTE
-        
-        STRATEGIA:
-        - Prime 2-3 righe: Titolo + Prezzo + Km (visibili prima di "...Altro")
-        - Caratteristiche chiave compatte
-        - Link Messenger GRANDE e VISIBILE subito dopo le info principali
-        - Facebook renderà il link automaticamente cliccabile
+        Genera testo ottimizzato per Facebook
         """
         parts = []
         
@@ -424,17 +408,11 @@ class PostGenerator:
         anno = auto.get('anno_immatricolazione', '')
         anno_str = f"({anno})" if anno else ""
         
-        # Titolo + Prezzo + Km - TUTTO VISIBILE prima di "...Altro"
         parts.append(f"🚗 {auto['marca']} {auto['modello']} {anno_str}")
         parts.append(f"💰 {prezzo_str} € | 📏 {km_str} km")
         parts.append("")
         
-        # LINK MESSENGER - SUBITO VISIBILE (prima di "...Altro")
-        parts.append("👉 CONTATTACI SU MESSENGER:")
-        parts.append(self.config.CTA_LINK)
-        parts.append("")
-        
-        # Caratteristiche (andranno sotto "...Altro" ma visibili espandendo)
+        # Caratteristiche
         specs_line = []
         
         if auto.get('carburante'):
@@ -451,7 +429,7 @@ class PostGenerator:
         if specs_line:
             parts.append(" • ".join(specs_line))
         
-        # Descrizione dettagliata (sotto "...Altro")
+        # Descrizione
         if auto.get('descrizione') and auto['descrizione'].strip():
             desc = auto['descrizione'].strip()
             if len(desc) > 150:
@@ -459,11 +437,13 @@ class PostGenerator:
             parts.append("")
             parts.append(desc)
         
-        # Call to action finale
+        # Call to action
         parts.append("")
         parts.append("✅ Auto verificata e pronta alla consegna")
+        parts.append("")
+        parts.append("💬 Clicca sul link qui sotto per contattarci subito su Messenger!")
         
-        # WhatsApp alternativo (per chi preferisce)
+        # WhatsApp alternativo
         whatsapp_text = f"Info su {auto['marca']} {auto['modello']}"
         whatsapp_link = f"{self.config.whatsapp_link}?text={requests.utils.quote(whatsapp_text)}"
         parts.append("")
@@ -485,15 +465,15 @@ class AutoPublisher:
     
     def run(self) -> int:
         """Esegue il processo di pubblicazione"""
-        logger.info("🚀 Avvio Facebook Auto Publisher (CTA Optimized)")
-        logger.info(f"🔘 CTA Type: {self.config.CTA_TYPE}")
-        logger.info(f"🔗 CTA Link: {self.config.CTA_LINK}")
+        logger.info("🚀 Avvio Facebook Auto Publisher (Multi Images + Link)")
+        logger.info(f"🔗 Link Messenger: {self.config.MESSENGER_LINK}")
+        logger.info(f"🖼️  Max immagini per post: {self.config.MAX_IMAGES_PER_POST}")
         
         # Carica auto da pubblicare
         autos = self.db.load_autos_to_publish(self.config.MAX_POSTS_PER_RUN)
         
         if not autos:
-            logger.info("ℹ️ Nessuna auto da pubblicare")
+            logger.info("ℹ️  Nessuna auto da pubblicare")
             return 0
         
         published_count = 0
@@ -504,32 +484,32 @@ class AutoPublisher:
             logger.info(f"{'='*60}")
             
             try:
-                # Genera testo ottimizzato per Facebook
+                # Genera testo
                 post_text = self.post_gen.generate_optimized_text(auto)
                 
-                # Prepara immagine
-                image_url = auto.get('immagine_principale')
-                images = [image_url] if image_url and image_url.strip() else None
+                # Prepara immagini (tutte disponibili, max 4)
+                images = auto.get('all_images', [])
                 
                 logger.info(f"📝 Lunghezza testo: {len(post_text)} caratteri")
-                logger.info(f"🖼️ Immagini: {len(images) if images else 0}")
+                logger.info(f"🖼️  Immagini da pubblicare: {len(images)}")
                 
                 if images:
-                    logger.info(f"📸 URL immagine: {images[0]}")
+                    for i, img_url in enumerate(images, 1):
+                        logger.info(f"  📸 Immagine {i}: {img_url[:80]}...")
                 
-                logger.info(f"\n👁️ Preview (prime 3 righe visibili):")
+                logger.info(f"\n👁️  Preview (prime 3 righe):")
                 preview_lines = post_text.split('\n')[:3]
                 logger.info('\n'.join(preview_lines))
-                logger.info(f"[...Altro]\n")
+                logger.info(f"[...]\n")
                 
-                # Pubblica su Facebook con CTA
-                result = self.fb.publish_with_cta(
+                # Pubblica su Facebook con link Messenger
+                result = self.fb.publish_with_link(
                     message=post_text,
                     image_urls=images
                 )
                 
                 post_id = result.get('id', result.get('post_id', 'N/A'))
-                logger.info(f"✅ Post pubblicato con CTA! ID: {post_id}")
+                logger.info(f"✅ Post pubblicato con {len(images)} immagini! ID: {post_id}")
                 
                 # Aggiorna database
                 if self.db.update_publication_status(auto['auto_id'], post_id):
@@ -567,7 +547,7 @@ def main() -> int:
         return 0 if published_count > 0 else 1
         
     except KeyboardInterrupt:
-        logger.info("\n⚠️ Processo interrotto")
+        logger.info("\n⚠️  Processo interrotto")
         return 130
     except Exception as e:
         logger.error(f"❌ Errore fatale: {e}")
