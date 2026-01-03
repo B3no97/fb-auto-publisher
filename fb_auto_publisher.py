@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Facebook Auto Publisher - Multi Images Version
+Facebook Auto Publisher - Multi Images from Separate Table
 Pubblica automaticamente annunci di auto da MySQL su pagina Facebook
-Con supporto fino a 4 immagini e link Messenger integrato
+Carica immagini dalla tabella auto_vetrina_immagini
 """
 import os
 import sys
@@ -127,14 +127,46 @@ class DatabaseManager:
             logger.error(f"❌ Errore ottenimento connessione: {e}")
             raise
     
-    def load_autos_to_publish(self, max_posts: int) -> List[Dict]:
-        """Carica le auto non ancora pubblicate CON TUTTE LE IMMAGINI"""
+    def load_auto_images(self, auto_id: int, max_images: int = 4) -> List[str]:
+        """
+        Carica le immagini di un'auto dalla tabella auto_vetrina_immagini
+        Ordinate per campo 'ordine' ASC
+        """
         conn = None
         try:
             conn = self.get_connection()
             cursor = conn.cursor(dictionary=True)
             
-            # Query principale per le auto
+            query = """
+                SELECT url_immagine
+                FROM auto_vetrina_immagini
+                WHERE auto_id = %s
+                ORDER BY ordine ASC
+                LIMIT %s
+            """
+            cursor.execute(query, (auto_id, max_images))
+            results = cursor.fetchall()
+            cursor.close()
+            
+            # Estrai solo gli URL
+            images = [row['url_immagine'] for row in results if row['url_immagine']]
+            
+            return images
+            
+        except MySQLError as e:
+            logger.error(f"❌ Errore caricamento immagini per auto_id={auto_id}: {e}")
+            return []
+        finally:
+            if conn and conn.is_connected():
+                conn.close()
+    
+    def load_autos_to_publish(self, max_posts: int) -> List[Dict]:
+        """Carica le auto non ancora pubblicate"""
+        conn = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor(dictionary=True)
+            
             query = """
                 SELECT 
                     v.auto_id, 
@@ -149,11 +181,7 @@ class DatabaseManager:
                     a.potenza_kw,
                     a.cilindrata_cc,
                     v.descrizione, 
-                    v.prezzo_vendita,
-                    v.immagine_principale,
-                    v.immagine_2,
-                    v.immagine_3,
-                    v.immagine_4
+                    v.prezzo_vendita
                 FROM auto_vetrina v
                 JOIN auto a ON v.auto_id = a.id
                 WHERE v.pubblicata_fb = 0 
@@ -163,23 +191,17 @@ class DatabaseManager:
             """
             cursor.execute(query, (max_posts,))
             autos = cursor.fetchall()
+            cursor.close()
             
-            # Per ogni auto, raccogli tutte le immagini disponibili
+            # Per ogni auto, carica le sue immagini
             for auto in autos:
-                images = []
-                for i in range(1, 5):  # immagine_principale, immagine_2, 3, 4
-                    if i == 1:
-                        img_url = auto.get('immagine_principale')
-                    else:
-                        img_url = auto.get(f'immagine_{i}')
-                    
-                    if img_url and img_url.strip():
-                        images.append(img_url.strip())
-                
+                images = self.load_auto_images(
+                    auto['auto_id'], 
+                    self.config.MAX_IMAGES_PER_POST
+                )
                 auto['all_images'] = images
                 logger.info(f"  📸 {auto['marca']} {auto['modello']}: {len(images)} immagini trovate")
             
-            cursor.close()
             logger.info(f"📊 Caricate {len(autos)} auto da pubblicare")
             return autos
             
@@ -241,16 +263,16 @@ class FacebookPublisher:
     def _verify_image_url(self, url: str) -> bool:
         """Verifica che l'immagine sia accessibile pubblicamente"""
         try:
-            logger.info(f"      🔍 Test accessibilità immagine...")
+            logger.info(f"      🔍 Test accessibilità...")
             response = requests.head(url, timeout=10, allow_redirects=True)
             
             if response.status_code == 200:
                 content_type = response.headers.get('content-type', '')
                 if 'image' in content_type.lower():
-                    logger.info(f"      ✅ Immagine accessibile ({content_type})")
+                    logger.info(f"      ✅ Accessibile ({content_type})")
                     return True
                 else:
-                    logger.warning(f"      ⚠️  URL non restituisce immagine: {content_type}")
+                    logger.warning(f"      ⚠️  Non è un'immagine: {content_type}")
                     return False
             else:
                 logger.warning(f"      ⚠️  HTTP {response.status_code}")
@@ -268,8 +290,6 @@ class FacebookPublisher:
         1. Carica fino a 4 immagini come unpublished
         2. Crea post con carousel + link Messenger
         3. Facebook mostrerà: Immagini + Link cliccabile sotto
-        
-        Questo approccio funziona meglio del CTA button con multiple immagini
         """
         import json
         
@@ -487,7 +507,7 @@ class AutoPublisher:
                 # Genera testo
                 post_text = self.post_gen.generate_optimized_text(auto)
                 
-                # Prepara immagini (tutte disponibili, max 4)
+                # Prepara immagini (dalla tabella auto_vetrina_immagini)
                 images = auto.get('all_images', [])
                 
                 logger.info(f"📝 Lunghezza testo: {len(post_text)} caratteri")
@@ -496,6 +516,8 @@ class AutoPublisher:
                 if images:
                     for i, img_url in enumerate(images, 1):
                         logger.info(f"  📸 Immagine {i}: {img_url[:80]}...")
+                else:
+                    logger.warning("  ⚠️  Nessuna immagine trovata per questa auto!")
                 
                 logger.info(f"\n👁️  Preview (prime 3 righe):")
                 preview_lines = post_text.split('\n')[:3]
@@ -505,7 +527,7 @@ class AutoPublisher:
                 # Pubblica su Facebook con link Messenger
                 result = self.fb.publish_with_link(
                     message=post_text,
-                    image_urls=images
+                    image_urls=images if images else None
                 )
                 
                 post_id = result.get('id', result.get('post_id', 'N/A'))
