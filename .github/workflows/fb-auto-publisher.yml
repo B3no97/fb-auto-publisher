@@ -50,16 +50,10 @@ jobs:
           FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
           
           # ========================================
-          # MESSENGER LINK
-          # Include nel testo dei post, Facebook lo rende cliccabile
-          # Non usare come parametro API (nasconderebbe le immagini!)
-          # ========================================
-          MESSENGER_LINK: "https://m.me/875722978961810"
-          
-          # ========================================
-          # WHATSAPP (numero per link nel testo)
+          # CONTATTI
           # ========================================
           WHATSAPP_NUMBER: "393407346239"
+          WEBSITE_URL: "mc-auto.it"
           
           # ========================================
           # CONFIGURAZIONE PUBBLICAZIONE
@@ -78,36 +72,34 @@ jobs:
           retention-days: 7
 
 # ==========================================
-# 📚 COME FUNZIONA - MULTI IMAGES + LINK
+# 📚 COME FUNZIONA
 # ==========================================
 #
-# IMPORTANTE: Link NEL TESTO, non come parametro API!
-# Questo assicura che le immagini siano sempre visibili.
-#
-# RISULTATO SU FACEBOOK:
+# FORMATO POST:
 # ┌─────────────────────────────────────┐
 # │ 🚗 Mercedes GLA (2014)              │
-# │ 💰 10.990 € | 📏 222.000 km         │
-# │ [...Altro]                          │
+# │ 💰 10.990 € • 📏 222.000 km         │
+# │ GPL • MANUALE • 136 CV              │
+# │ [descrizione completa]              │
 # ├─────────────────────────────────────┤
 # │ [📷 1] [📷 2] [📷 3] [📷 4]        │ ← CAROUSEL
 # ├─────────────────────────────────────┤
 # │ [Espandi per vedere tutto]          │
 # │                                     │
-# │ 💬 CONTATTACI SU MESSENGER:        │
-# │ 👉 m.me/875722978961810 ← CLICK!   │ ← LINK CLICCABILE
+# │ 📱 WhatsApp: +39 340 734 6239      │
+# │ https://wa.me/393407346239 ← CLICK! │
 # │                                     │
-# │ 📱 Oppure su WhatsApp:             │
-# │ 👉 wa.me/393407346239              │
+# │ 🌐 Per maggiori dettagli:          │
+# │ mc-auto.it                          │
 # └─────────────────────────────────────┘
 #
 # VANTAGGI:
-# ✅ Fino a 4 immagini in carousel scorrevole
-# ✅ Link Messenger cliccabile nel testo
-# ✅ Link WhatsApp alternativo
-# ✅ Nessun conflitto con link preview
-# ✅ Le immagini sono SEMPRE visibili
-# ✅ Mobile-friendly (link facile da tappare)
+# ✅ Formato compatto e professionale
+# ✅ Fino a 4 immagini in carousel
+# ✅ Descrizione completa senza limiti
+# ✅ Link WhatsApp cliccabile
+# ✅ Sito web per approfondimenti
+# ✅ Mobile-friendly
 #
 # ==========================================
 # 🗂️ REQUISITI DATABASE
