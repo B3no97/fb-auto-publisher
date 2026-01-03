@@ -375,27 +375,29 @@ class FacebookPublisher:
             
             logger.info(f"  ✅ {len(media_ids)} immagini caricate correttamente")
             
-            # Step 2: Crea post con immagini + LINK
+            # Step 2: Crea post con immagini (link NEL TESTO, non come parametro)
+            # IMPORTANTE: Non usiamo "link" parameter perché Facebook darebbe priorità
+            # al link preview e ignorerebbe le immagini. Invece, includiamo il link
+            # nel testo del messaggio, che Facebook renderà automaticamente cliccabile.
             payload = {
                 "message": message,
                 "attached_media": json.dumps(media_ids),
-                "link": self.config.MESSENGER_LINK,  # ⭐ LINK invece di call_to_action
                 "access_token": self.config.FACEBOOK_ACCESS_TOKEN
             }
             
-            logger.info(f"  🔗 Link Messenger: {self.config.MESSENGER_LINK}")
-            logger.info("  📤 Pubblicazione post con carousel + link...")
+            logger.info("  📤 Pubblicazione post con carousel...")
+            logger.info("  💡 Link Messenger incluso nel testo (auto-cliccabile)")
             
             result = self._make_request('POST', endpoint, data=payload)
             return result
         
-        # Nessuna immagine - post testuale con link
+        # Nessuna immagine - post testuale
         else:
-            logger.info("  📝 Pubblicazione post testuale con link")
+            logger.info("  📝 Pubblicazione post testuale")
+            logger.info("  💡 Link Messenger incluso nel testo (auto-cliccabile)")
             
             payload = {
                 "message": message,
-                "link": self.config.MESSENGER_LINK,
                 "access_token": self.config.FACEBOOK_ACCESS_TOKEN
             }
             
@@ -415,6 +417,7 @@ class PostGenerator:
     def generate_optimized_text(self, auto: Dict) -> str:
         """
         Genera testo ottimizzato per Facebook
+        Il link Messenger nel testo diventa automaticamente cliccabile
         """
         parts = []
         
@@ -457,17 +460,19 @@ class PostGenerator:
             parts.append("")
             parts.append(desc)
         
-        # Call to action
+        # Call to action PROMINENTE con link
         parts.append("")
         parts.append("✅ Auto verificata e pronta alla consegna")
         parts.append("")
-        parts.append("💬 Clicca sul link qui sotto per contattarci subito su Messenger!")
+        parts.append("💬 CONTATTACI SU MESSENGER:")
+        parts.append(f"👉 {self.config.MESSENGER_LINK}")
         
         # WhatsApp alternativo
         whatsapp_text = f"Info su {auto['marca']} {auto['modello']}"
         whatsapp_link = f"{self.config.whatsapp_link}?text={requests.utils.quote(whatsapp_text)}"
         parts.append("")
-        parts.append(f"📱 Oppure scrivici su WhatsApp: {whatsapp_link}")
+        parts.append(f"📱 Oppure su WhatsApp:")
+        parts.append(f"👉 {whatsapp_link}")
         
         return "\n".join(parts)
 
@@ -485,9 +490,10 @@ class AutoPublisher:
     
     def run(self) -> int:
         """Esegue il processo di pubblicazione"""
-        logger.info("🚀 Avvio Facebook Auto Publisher (Multi Images + Link)")
-        logger.info(f"🔗 Link Messenger: {self.config.MESSENGER_LINK}")
+        logger.info("🚀 Avvio Facebook Auto Publisher (Multi Images)")
+        logger.info(f"💬 Link Messenger (nel testo): {self.config.MESSENGER_LINK}")
         logger.info(f"🖼️  Max immagini per post: {self.config.MAX_IMAGES_PER_POST}")
+        logger.info("💡 I link nel testo diventano automaticamente cliccabili su Facebook")
         
         # Carica auto da pubblicare
         autos = self.db.load_autos_to_publish(self.config.MAX_POSTS_PER_RUN)
@@ -524,14 +530,15 @@ class AutoPublisher:
                 logger.info('\n'.join(preview_lines))
                 logger.info(f"[...]\n")
                 
-                # Pubblica su Facebook con link Messenger
+                # Pubblica su Facebook
                 result = self.fb.publish_with_link(
                     message=post_text,
                     image_urls=images if images else None
                 )
                 
                 post_id = result.get('id', result.get('post_id', 'N/A'))
-                logger.info(f"✅ Post pubblicato con {len(images)} immagini! ID: {post_id}")
+                logger.info(f"✅ Post pubblicato! ID: {post_id}")
+                logger.info(f"   📸 {len(images)} immagini | 💬 Link cliccabile nel testo")
                 
                 # Aggiorna database
                 if self.db.update_publication_status(auto['auto_id'], post_id):
