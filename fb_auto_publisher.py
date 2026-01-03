@@ -411,15 +411,14 @@ class PostGenerator:
         self.config = config
     
     def generate_optimized_text(self, auto: Dict) -> str:
-        """Genera testo ottimizzato, chiaro e leggibile per i post su Facebook"""
+        """Genera testo ottimizzato per Facebook, chiaro e ordinato"""
     
         parts = []
     
         # --- Titolo ---
-        title = f"🚗 **{auto['marca']} {auto['modello']}"
+        title = f"🚗 {auto['marca']} {auto['modello']}"
         if auto.get('anno_immatricolazione'):
             title += f" • {auto['anno_immatricolazione']}"
-        title += "**"
         parts.append(title)
         parts.append("")  # Spazio
     
@@ -429,19 +428,19 @@ class PostGenerator:
         km = auto.get('chilometraggio', 0)
         km_str = f"{km:,}".replace(',', '.') if km else "N/D"
     
-        parts.append(f"💰 **Prezzo:** € {prezzo_str}")
-        parts.append(f"🚘 **Chilometri:** {km_str} km")
+        parts.append(f"💰 Prezzo: € {prezzo_str}")
+        parts.append(f"🚘 Chilometri: {km_str} km")
     
         # --- Caratteristiche tecniche ---
         specs = []
         if auto.get('carburante'):
-            specs.append(f"⛽ **Carburante:** {auto['carburante'].capitalize()}")
+            specs.append(f"⛽ Carburante: {auto['carburante'].capitalize()}")
         if auto.get('cambio') and auto['cambio'].lower() != 'manuale':
-            specs.append(f"⚙️ **Cambio:** {auto['cambio'].capitalize()}")  # Solo automatico
+            specs.append(f"⚙️ Cambio: {auto['cambio'].capitalize()}")  # Solo automatico
         if auto.get('potenza_kw'):
             kw = auto['potenza_kw']
             cv = int(kw * 1.36)
-            specs.append(f"🔋 **Potenza:** {kw} kW ({cv} CV)")
+            specs.append(f"🔋 Potenza: {kw} kW ({cv} CV)")
         if specs:
             parts.append(" | ".join(specs))
     
@@ -459,10 +458,14 @@ class PostGenerator:
         else:
             wa_display = f"+{wa_number}"
     
-        parts.append(f"📱 **Contatto WhatsApp:** [{wa_display}](https://wa.me/{wa_number})")
-        parts.append(f"🌐 **Maggiori dettagli e altre auto disponibili:** [{self.config.WEBSITE_URL}]({self.config.WEBSITE_URL})")
+        parts.append(f"📱 Contatto WhatsApp: https://wa.me/{wa_number} ({wa_display})")
+        website = self.config.WEBSITE_URL
+        if not website.startswith("http"):
+            website = f"https://{website}"
+        parts.append(f"🌐 Maggiori dettagli e altre auto disponibili: {website}")
     
         return "\n".join(parts)
+
 
 
 # ========================================
