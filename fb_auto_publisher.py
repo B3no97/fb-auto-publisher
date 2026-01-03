@@ -52,7 +52,7 @@ class Config:
     
     # Contatti
     WHATSAPP_NUMBER: str = os.getenv("WHATSAPP_NUMBER", "393407346239")
-    WEBSITE_URL: str = os.getenv("WEBSITE_URL", "mc-auto.it")
+    WEBSITE_URL: str = os.getenv("WEBSITE_URL", "https://www.mc-auto.it")
     
     # Limiti
     MAX_POSTS_PER_RUN: int = int(os.getenv("MAX_POSTS", "1"))
@@ -421,27 +421,42 @@ class PostGenerator:
         anno = auto.get('anno_immatricolazione', '')
         anno_str = f"({anno})" if anno else ""
         parts.append(f"🚗 {auto['marca']} {auto['modello']} {anno_str}")
-        
-        # RIGA 2: Prezzo e Km - TUTTO SU UNA RIGA
+
+        title = f"🚗 {auto['marca']} {auto['modello']}"
+        if auto.get('anno_immatricolazione'):
+            title += f" • {auto['anno_immatricolazione']}"
+        parts.append(title)
+
+
+        # RIGA 2 e 3: Prezzo e Km
         prezzo = float(auto['prezzo_vendita'])
         prezzo_str = f"{prezzo:,.0f}".replace(',', '.')
         km = auto.get('chilometraggio', 0)
         km_str = f"{km:,}".replace(',', '.') if km else "N/D"
-        parts.append(f"💰 {prezzo_str} € • 📏 {km_str} km")
+        
+        parts.append(f"💰 Prezzo: {prezzo_str} €")
+        parts.append(f"🚘 Chilometri percorsi: {km_str} km")
+
         
         # RIGA 3: Caratteristiche tecniche - TUTTO SU UNA RIGA
         specs = []
+        # Carburante
         if auto.get('carburante'):
-            specs.append(auto['carburante'].upper())
-        if auto.get('cambio'):
-            specs.append(auto['cambio'].upper())
+            specs.append(f"Carburante: {auto['carburante'].capitalize()}")
+        
+        # Cambio: mostriamo solo se Automatico
+        if auto.get('cambio') and auto['cambio'].lower() != 'manuale':
+            specs.append(f"Cambio: {auto['cambio'].capitalize()}")  # Solo automatico
+        
+        # Potenza
         if auto.get('potenza_kw'):
             kw = auto['potenza_kw']
             cv = int(kw * 1.36)
-            specs.append(f"{cv} CV")
+            specs.append(f"Potenza: {kw} kW ({cv} CV)")
         
         if specs:
-            parts.append(" • ".join(specs))
+            parts.append(" | ".join(specs))
+
         
         # Descrizione COMPLETA (senza limite caratteri)
         if auto.get('descrizione') and auto['descrizione'].strip():
@@ -458,9 +473,9 @@ class PostGenerator:
         
         parts.append("")
         parts.append(f"📱 WhatsApp: {wa_display}")
-        parts.append(f"https://wa.me/{wa_number}")
+        parts.append(f"👉 https://wa.me/{wa_number}") 
         parts.append("")
-        parts.append(f"🌐 Per maggiori dettagli: {self.config.WEBSITE_URL}")
+        parts.append(f"🌐 Per maggiori dettagli o vedere altre auto disponibili:\n👉 {self.config.WEBSITE_URL}")
         
         return "\n".join(parts)
 
