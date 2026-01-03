@@ -411,73 +411,77 @@ class PostGenerator:
         self.config = config
     
     def generate_optimized_text(self, auto: Dict) -> str:
-        """
-        Genera testo ottimizzato per Facebook
-        Formato compatto e professionale
-        """
-        parts = []
-        
-        # RIGA 1: Titolo
-        anno = auto.get('anno_immatricolazione', '')
-        anno_str = f"({anno})" if anno else ""
-        parts.append(f"🚗 {auto['marca']} {auto['modello']} {anno_str}")
+    """
+    Genera il testo ottimizzato per post Facebook con immagini singole o carosello.
+    Mostra titolo, prezzo, km, caratteristiche principali e contatti.
+    """
+    parts = []
 
-        title = f"🚗 {auto['marca']} {auto['modello']}"
-        if auto.get('anno_immatricolazione'):
-            title += f" • {auto['anno_immatricolazione']}"
-        parts.append(title)
+    # ===============================
+    # RIGA 1: Titolo
+    # ===============================
+    title = f"🚗 {auto['marca']} {auto['modello']}"
+    if auto.get('anno_immatricolazione'):
+        title += f" • {auto['anno_immatricolazione']}"
+    parts.append(title)
 
+    # ===============================
+    # RIGA 2 e 3: Prezzo e chilometri
+    # ===============================
+    prezzo = float(auto['prezzo_vendita'])
+    prezzo_str = f"{prezzo:,.0f}".replace(',', '.')
+    km = auto.get('chilometraggio', 0)
+    km_str = f"{km:,}".replace(',', '.') if km else "N/D"
 
-        # RIGA 2 e 3: Prezzo e Km
-        prezzo = float(auto['prezzo_vendita'])
-        prezzo_str = f"{prezzo:,.0f}".replace(',', '.')
-        km = auto.get('chilometraggio', 0)
-        km_str = f"{km:,}".replace(',', '.') if km else "N/D"
-        
-        parts.append(f"💰 Prezzo: {prezzo_str} €")
-        parts.append(f"🚘 Chilometri percorsi: {km_str} km")
+    parts.append(f"💰 Prezzo: {prezzo_str} €")
+    parts.append(f"🚘 Chilometri percorsi: {km_str} km")
 
-        
-        # RIGA 3: Caratteristiche tecniche - TUTTO SU UNA RIGA
-        specs = []
-        # Carburante
-        if auto.get('carburante'):
-            specs.append(f"Carburante: {auto['carburante'].capitalize()}")
-        
-        # Cambio: mostriamo solo se Automatico
-        if auto.get('cambio') and auto['cambio'].lower() != 'manuale':
-            specs.append(f"Cambio: {auto['cambio'].capitalize()}")  # Solo automatico
-        
-        # Potenza
-        if auto.get('potenza_kw'):
-            kw = auto['potenza_kw']
-            cv = int(kw * 1.36)
-            specs.append(f"Potenza: {kw} kW ({cv} CV)")
-        
-        if specs:
-            parts.append(" | ".join(specs))
+    # ===============================
+    # Caratteristiche tecniche principali (su unica riga)
+    # ===============================
+    specs = []
 
-        
-        # Descrizione COMPLETA (senza limite caratteri)
-        if auto.get('descrizione') and auto['descrizione'].strip():
-            parts.append("")
-            parts.append(auto['descrizione'].strip())
-        
-        # Contatti
-        # Formatta numero WhatsApp (rimuovi prefisso internazionale per display)
-        wa_number = self.config.WHATSAPP_NUMBER
-        if wa_number.startswith('39'):
-            wa_display = f"+39 {wa_number[2:5]} {wa_number[5:8]} {wa_number[8:]}"
-        else:
-            wa_display = f"+{wa_number}"
-        
-        parts.append("")
-        parts.append(f"📱 WhatsApp: {wa_display}")
-        parts.append(f"👉 https://wa.me/{wa_number}") 
-        parts.append("")
-        parts.append(f"🌐 Per maggiori dettagli o vedere altre auto disponibili:\n👉 {self.config.WEBSITE_URL}")
-        
-        return "\n".join(parts)
+    # Carburante
+    if auto.get('carburante'):
+        specs.append(f"Carburante: {auto['carburante'].capitalize()}")
+
+    # Cambio: mostriamo solo se Automatico
+    if auto.get('cambio') and auto['cambio'].lower() != 'manuale':
+        specs.append(f"Cambio: {auto['cambio'].capitalize()}")
+
+    # Potenza
+    if auto.get('potenza_kw'):
+        kw = auto['potenza_kw']
+        cv = int(kw * 1.36)
+        specs.append(f"Potenza: {kw} kW ({cv} CV)")
+
+    if specs:
+        parts.append(" | ".join(specs))
+
+    # ===============================
+    # Descrizione completa
+    # ===============================
+    if auto.get('descrizione') and auto['descrizione'].strip():
+        parts.append("")  # linea vuota per separazione
+        parts.append(auto['descrizione'].strip())
+
+    # ===============================
+    # Contatti
+    # ===============================
+    wa_number = self.config.WHATSAPP_NUMBER
+    # Formatta numero WhatsApp per display
+    if wa_number.startswith('39'):
+        wa_display = f"+39 {wa_number[2:5]} {wa_number[5:8]} {wa_number[8:]}"
+    else:
+        wa_display = f"+{wa_number}"
+
+    parts.append("")
+    parts.append(f"📱 WhatsApp: {wa_display}")
+    parts.append(f"👉 https://wa.me/{wa_number}")
+    parts.append("")
+    parts.append(f"🌐 Per maggiori dettagli o vedere altre auto disponibili:\n👉 {self.config.WEBSITE_URL}")
+
+    return "\n".join(parts)
 
 # ========================================
 # ORCHESTRATORE PRINCIPALE
