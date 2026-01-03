@@ -223,61 +223,96 @@ class FacebookPublisher:
         """
         Pubblica post con immagini e CTA button
         
-        STRATEGIA:
-        1. Upload immagini come unpublished
-        2. Crea post feed con immagini + messaggio
-        3. Aggiungi CTA button (Messenger o Link sito)
+        STRATEGIA CORRETTA per CTA + Immagini:
+        1. Se c'è UN'immagine: usa link post con picture (mostra immagine + CTA)
+        2. Se ci sono PIÙ immagini: pubblica carousel senza CTA (Facebook non supporta CTA su carousel)
+        3. Se non ci sono immagini: post testuale con CTA
         
-        VANTAGGI:
-        - CTA sempre visibile sotto il post
-        - Prezzo e km mostrati nella descrizione
-        - Pulsante "Messaggio" o "Scopri di più" ben evidente
+        IMPORTANTE: Facebook mostra CTA solo su link posts, non su photo posts con attached_media
         """
         import json
         
-        # 1. Upload immagini come unpublished
-        media_ids = []
-        if image_urls:
+        endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/feed"
+        
+        # CASO 1: Una singola immagine - usa link post con picture
+        if image_urls and len(image_urls) == 1:
+            logger.info("  📸 Pubblicazione con immagine singola + CTA")
+            
+            payload = {
+                "message": message,
+                "link": self.config.CTA_LINK,  # Link è obbligatorio per CTA
+                "picture": image_urls[0],      # Immagine come preview del link
+                "access_token": self.config.FACEBOOK_ACCESS_TOKEN
+            }
+            
+            # Aggiungi CTA button
+            cta_config = {
+                "type": self.config.CTA_TYPE,
+                "value": {
+                    "link": self.config.CTA_LINK
+                }
+            }
+            payload["call_to_action"] = json.dumps(cta_config)
+            
+            logger.info(f"  🔘 CTA: {self.config.CTA_TYPE} → {self.config.CTA_LINK}")
+            logger.info("  📤 Pubblicazione link post con immagine e CTA...")
+            
+            result = self._make_request('POST', endpoint, data=payload)
+            return result
+        
+        # CASO 2: Più immagini - carousel SENZA CTA (Facebook non supporta CTA su carousel)
+        elif image_urls and len(image_urls) > 1:
+            logger.info(f"  📸 Pubblicazione carousel con {len(image_urls)} immagini (no CTA)")
+            logger.warning("  ⚠️ Facebook non supporta CTA su carousel - pubblico solo immagini")
+            
+            # Upload immagini come unpublished
+            media_ids = []
             for idx, url in enumerate(image_urls[:self.config.MAX_IMAGES_PER_POST], 1):
-                logger.info(f"  📸 Upload immagine {idx}/{len(image_urls)}")
-                endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/photos"
-                payload = {
+                logger.info(f"    📷 Upload immagine {idx}/{len(image_urls)}")
+                photo_endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/photos"
+                photo_payload = {
                     "url": url,
                     "published": "false",
                     "access_token": self.config.FACEBOOK_ACCESS_TOKEN
                 }
-                result = self._make_request('POST', endpoint, data=payload)
+                result = self._make_request('POST', photo_endpoint, data=photo_payload)
                 media_ids.append({"media_fbid": result["id"]})
-        
-        # 2. Crea il post con CTA
-        endpoint = f"{self.config.graph_api_base}/{self.config.FACEBOOK_PAGE_ID}/feed"
-        
-        payload = {
-            "message": message,
-            "access_token": self.config.FACEBOOK_ACCESS_TOKEN
-        }
-        
-        # Aggiungi immagini
-        if media_ids:
-            payload["attached_media"] = json.dumps(media_ids)
-        
-        # Aggiungi CTA button
-        cta_config = {
-            "type": self.config.CTA_TYPE,
-            "value": {
-                "link": self.config.CTA_LINK
+            
+            # Pubblica carousel
+            payload = {
+                "message": message,
+                "attached_media": json.dumps(media_ids),
+                "access_token": self.config.FACEBOOK_ACCESS_TOKEN
             }
-        }
+            
+            logger.info("  📤 Pubblicazione carousel...")
+            result = self._make_request('POST', endpoint, data=payload)
+            return result
         
-        payload["call_to_action"] = json.dumps(cta_config)
-        
-        logger.info(f"  🔘 CTA: {self.config.CTA_TYPE} → {self.config.CTA_LINK}")
-        
-        # 3. Pubblica
-        logger.info("  📤 Pubblicazione post con CTA...")
-        result = self._make_request('POST', endpoint, data=payload)
-        
-        return result
+        # CASO 3: Nessuna immagine - solo testo con CTA
+        else:
+            logger.info("  📝 Pubblicazione solo testo con CTA")
+            
+            payload = {
+                "message": message,
+                "link": self.config.CTA_LINK,
+                "access_token": self.config.FACEBOOK_ACCESS_TOKEN
+            }
+            
+            # Aggiungi CTA button
+            cta_config = {
+                "type": self.config.CTA_TYPE,
+                "value": {
+                    "link": self.config.CTA_LINK
+                }
+            }
+            payload["call_to_action"] = json.dumps(cta_config)
+            
+            logger.info(f"  🔘 CTA: {self.config.CTA_TYPE} → {self.config.CTA_LINK}")
+            logger.info("  📤 Pubblicazione post testuale con CTA...")
+            
+            result = self._make_request('POST', endpoint, data=payload)
+            return result
 
 # ========================================
 # POST GENERATOR
