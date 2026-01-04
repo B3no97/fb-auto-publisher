@@ -3,11 +3,15 @@
 # GitHub Actions Workflow - Multi Images + Link
 # ==========================================
 name: Facebook Auto Publisher (Multi Images)
-
 on:
-  schedule:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 0 * * *"
+
+#on:
+  #schedule:
     # Test: ogni 5 minuti
-    - cron: "*/5 * * * *"
+    #- cron: "*/5 * * * *"
     # Produzione: decommentare sotto
     # - cron: '0 9,15 * * *'  # 9:00 e 15:00 UTC (10:00 e 16:00 Italia inverno)
   
